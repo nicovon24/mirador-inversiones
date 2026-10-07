@@ -3,14 +3,13 @@ import { findCompany, sectorPeerAdrs } from "@/lib/companies";
 import { hasFinnhub } from "@/lib/env";
 import {
   finnhubEarnings,
-  finnhubMetrics,
   finnhubPeers,
-  finnhubProfile,
   finnhubRecommendations,
   type FinnhubEarning,
   type FinnhubProfile,
 } from "@/lib/market/finnhub";
-import { median, numberOrNull, PEER_METRICS, summarizeAnalysts, type AnalystSummary } from "@/lib/research";
+import { median, PEER_METRICS, summarizeAnalysts, type AnalystSummary } from "@/lib/research";
+import { getFundamental, getFundamentals } from "@/server/fundamentals";
 
 export type ResearchSource =
   /** Acción de EE.UU.: datos directos. */
@@ -36,6 +35,9 @@ export interface Research {
   peerMedians: Record<string, number | null>;
   analysts: AnalystSummary | null;
   earnings: FinnhubEarning[];
+  /** Cuándo se bajaron los datos fundamentales (ISO). */
+  fetchedAt: string;
+  stale: boolean;
 }
 
 export type ResearchResult =
@@ -70,40 +72,31 @@ export async function getResearch(market: "AR" | "US", symbol: string): Promise<
     };
   }
 
-  const [metricsRaw, profile, recs, earnings, peerList] = await Promise.all([
-    finnhubMetrics(target.symbol).catch(() => ({}) as Record<string, unknown>),
-    finnhubProfile(target.symbol).catch(() => null),
+  const [main, recs, earnings, peerList] = await Promise.all([
+    getFundamental(target.symbol),
     finnhubRecommendations(target.symbol).catch(() => []),
     finnhubEarnings(target.symbol).catch(() => []),
     finnhubPeers(target.symbol).catch(() => [] as string[]),
   ]);
 
-  const metrics = Object.fromEntries(Object.entries(metricsRaw).map(([k, v]) => [k, numberOrNull(v)]));
-  if (Object.values(metrics).every((v) => v === null))
+  if (!main || main.status !== "ok")
     return { ok: false, reason: "no-data", message: `Finnhub no devolvió datos fundamentales para ${target.symbol}.` };
 
   // Comparables: Finnhub incluye al propio ticker en la lista; se descarta y se limita para cuidar el cupo de la API.
   // Finnhub no trae comparables para los ADR argentinos: se usan las empresas del mismo sector del catálogo.
   const fromProvider = peerList.filter((s) => s !== target.symbol && !s.includes("."));
   const peerSymbols = (fromProvider.length > 0 ? fromProvider : market === "AR" ? sectorPeerAdrs(symbol) : []).slice(0, MAX_PEERS);
-  const peerData = await Promise.all(
-    peerSymbols.map(async (s): Promise<PeerRow | null> => {
-      const [m, p] = await Promise.all([
-        finnhubMetrics(s).catch(() => null),
-        finnhubProfile(s).catch(() => null),
-      ]);
-      if (!m) return null;
-      return {
-        symbol: s,
-        name: p?.name,
-        values: Object.fromEntries(PEER_METRICS.map((d) => [d.key, numberOrNull(m[d.key])])),
-      };
-    }),
-  );
-  const peers = peerData.filter((p): p is PeerRow => p !== null);
+  const peerRows = await getFundamentals(peerSymbols, { budget: MAX_PEERS });
+  const peers: PeerRow[] = peerSymbols.flatMap((s) => {
+    const r = peerRows.get(s);
+    if (!r || r.status !== "ok") return [];
+    return [{ symbol: s, name: r.profile?.name, values: Object.fromEntries(PEER_METRICS.map((d) => [d.key, r.metrics[d.key] ?? null])) }];
+  });
   const peerMedians = Object.fromEntries(
     PEER_METRICS.map((d) => [d.key, median(peers.map((p) => p.values[d.key]).filter((v): v is number => v !== null))]),
   );
+  const metrics = main.metrics;
+  const profile = main.profile;
 
   return {
     ok: true,
@@ -116,6 +109,8 @@ export async function getResearch(market: "AR" | "US", symbol: string): Promise<
       peerMedians,
       analysts: summarizeAnalysts(recs[0]),
       earnings: earnings.slice(0, 4),
+      fetchedAt: main.fetchedAt.toISOString(),
+      stale: main.stale,
     },
   };
 }

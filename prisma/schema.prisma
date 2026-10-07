@@ -115,6 +115,23 @@ model Notification {
   @@index([read, createdAt])
 }
 
+/// Caché persistente de datos fundamentales por ticker del proveedor (AAPL, YPF, GGAL…).
+/// Un CEDEAR y su acción en EE.UU., o una acción argentina y su ADR, comparten fila.
+model Fundamentals {
+  symbol    String   @id
+  /// Métricas numéricas tal como las entrega el proveedor (peTTM, roeTTM…).
+  metrics   Json
+  /// Perfil de la empresa: nombre, rubro, bolsa, logo…
+  profile   Json?
+  source    String   @default("finnhub")
+  /// "ok" | "empty" (el proveedor no tiene datos) | "error" (falló la descarga).
+  status    String   @default("ok")
+  error     String?
+  fetchedAt DateTime
+
+  @@index([fetchedAt])
+}
+
 /// Fila única (id = "singleton") con preferencias del usuario.
 model Setting {
   id             String  @id @default("singleton")

@@ -1,6 +1,7 @@
 import "server-only";
 import { z } from "zod";
 import { env } from "@/lib/env";
+import { TokenBucket } from "@/lib/rate-limit";
 import { cached } from "./cache";
 import type { Quote, SearchResult } from "./types";
 
@@ -26,7 +27,11 @@ const profileSchema = z.object({ name: z.string().optional() }).passthrough();
 
 const metricSchema = z.object({ metric: z.record(z.string(), z.unknown()) });
 
+/** Un solo cupo para todas las llamadas a Finnhub, con margen bajo el límite de 60 por minuto. */
+export const finnhubLimiter = new TokenBucket(50, 60_000);
+
 async function get<T>(path: string, schema: z.ZodType<T>): Promise<T> {
+  await finnhubLimiter.take();
   const sep = path.includes("?") ? "&" : "?";
   const res = await fetch(`${BASE}${path}${sep}token=${env.FINNHUB_API_KEY}`, {
     cache: "no-store",

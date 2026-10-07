@@ -1,7 +1,7 @@
 import { ExternalLink } from "lucide-react";
 import Link from "next/link";
 import { HelpTip } from "@/components/help/help-tip";
-import { formatDate, formatMoney, formatNumber, formatPercent } from "@/lib/format";
+import { formatDate, formatMoney, formatNumber, formatPercent, formatTime } from "@/lib/format";
 import { compareSentence, PEER_METRICS, RESEARCH_GROUPS, type MetricDef } from "@/lib/research";
 import { cn } from "@/lib/utils";
 import type { Research } from "@/server/research";
@@ -251,7 +251,10 @@ export function ResearchView({ data }: { data: Research }) {
       </div>
 
       <p className="text-[11px] text-muted-foreground">
-        Fuente: Finnhub, con datos de los últimos balances publicados. Estos números describen a la empresa; no son una recomendación de compra o venta.
+        Fuente: Finnhub, con datos de los últimos balances publicados. Datos guardados el {formatDate(data.fetchedAt)} a las{" "}
+        {formatTime(data.fetchedAt)}
+        {data.stale ? " (se actualizarán en la próxima visita)" : ""}. Estos números describen a la empresa; no son una recomendación de
+        compra o venta.
       </p>
     </div>
   );
