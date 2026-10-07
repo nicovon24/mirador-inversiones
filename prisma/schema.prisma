@@ -1,0 +1,124 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Market {
+  AR
+  US
+}
+
+enum AssetType {
+  STOCK
+  CEDEAR
+  BOND
+  ETF
+  CRYPTO
+  FX
+  OTHER
+}
+
+enum AlertCondition {
+  ABOVE
+  BELOW
+  PCT_CHANGE
+}
+
+enum AlertStatus {
+  ACTIVE
+  TRIGGERED
+  PAUSED
+}
+
+model Instrument {
+  id        String    @id @default(cuid())
+  symbol    String
+  market    Market
+  name      String?
+  type      AssetType @default(STOCK)
+  currency  String    @default("ARS")
+  createdAt DateTime  @default(now())
+
+  watchlistItems WatchlistItem[]
+  positions      Position[]
+  alerts         Alert[]
+
+  @@unique([symbol, market])
+}
+
+model Watchlist {
+  id        String          @id @default(cuid())
+  name      String
+  position  Int             @default(0)
+  createdAt DateTime        @default(now())
+  items     WatchlistItem[]
+}
+
+model WatchlistItem {
+  id           String     @id @default(cuid())
+  watchlistId  String
+  instrumentId String
+  position     Int        @default(0)
+  createdAt    DateTime   @default(now())
+  watchlist    Watchlist  @relation(fields: [watchlistId], references: [id], onDelete: Cascade)
+  instrument   Instrument @relation(fields: [instrumentId], references: [id], onDelete: Cascade)
+
+  @@unique([watchlistId, instrumentId])
+}
+
+/// Posiciones cargadas a mano (las de IOL se leen en vivo desde la API).
+model Position {
+  id           String     @id @default(cuid())
+  instrumentId String
+  quantity     Decimal    @db.Decimal(20, 8)
+  avgPrice     Decimal    @db.Decimal(20, 8)
+  currency     String     @default("ARS")
+  openedAt     DateTime   @default(now())
+  note         String?
+  instrument   Instrument @relation(fields: [instrumentId], references: [id], onDelete: Cascade)
+}
+
+model Alert {
+  id            String         @id @default(cuid())
+  instrumentId  String
+  condition     AlertCondition
+  /// Precio objetivo (ABOVE/BELOW) o porcentaje (PCT_CHANGE).
+  target        Decimal        @db.Decimal(20, 8)
+  /// Precio de referencia al crear la alerta, para PCT_CHANGE.
+  basePrice     Decimal?       @db.Decimal(20, 8)
+  status        AlertStatus    @default(ACTIVE)
+  repeat        Boolean        @default(false)
+  note          String?
+  triggeredAt   DateTime?
+  createdAt     DateTime       @default(now())
+  instrument    Instrument     @relation(fields: [instrumentId], references: [id], onDelete: Cascade)
+  notifications Notification[]
+
+  @@index([status])
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  alertId   String?
+  title     String
+  body      String
+  price     Decimal? @db.Decimal(20, 8)
+  read      Boolean  @default(false)
+  sentTo    String?
+  createdAt DateTime @default(now())
+  alert     Alert?   @relation(fields: [alertId], references: [id], onDelete: SetNull)
+
+  @@index([read, createdAt])
+}
+
+/// Fila única (id = "singleton") con preferencias del usuario.
+model Setting {
+  id             String  @id @default("singleton")
+  theme          String  @default("system")
+  baseCurrency   String  @default("ARS")
+  telegramChatId String?
+}
