@@ -3,7 +3,7 @@ import { PageHeader } from "@/components/page-header";
 import { WatchlistScreen } from "@/components/watchlist/watchlist-view";
 import { getWatchlists } from "@/server/queries";
 
-export const metadata: Metadata = { title: "Watchlist" };
+export const metadata: Metadata = { title: "Favoritos" };
 
 export default async function WatchlistPage({ searchParams }: PageProps<"/watchlist">) {
   const { list } = await searchParams;
@@ -11,7 +11,7 @@ export default async function WatchlistPage({ searchParams }: PageProps<"/watchl
 
   return (
     <div className="flex flex-col gap-6">
-      <PageHeader title="Watchlist" description="Tus listas con precios en vivo de Argentina y EE.UU." live />
+      <PageHeader title="Favoritos" description="Tus listas con precios en vivo de Argentina y EE.UU." live />
       <WatchlistScreen lists={lists} activeId={typeof list === "string" ? list : null} />
     </div>
   );

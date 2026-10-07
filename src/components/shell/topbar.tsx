@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { CommandSearch } from "./command-search";
 import { Notifications } from "./notifications";
-import { NAV, SidebarContent, type SidebarProps } from "./sidebar";
+import { navItemFor, SidebarContent, type SidebarProps } from "./sidebar";
 import { ThemeToggle } from "./theme-toggle";
 import type { NotificationView } from "@/server/queries";
 
@@ -21,7 +21,7 @@ function useCrumb() {
       { label: `${decodeURIComponent(symbol ?? "")} · ${market}` },
     ];
   }
-  const item = NAV.find((n) => (n.href === "/" ? pathname === "/" : pathname.startsWith(n.href)));
+  const item = navItemFor(pathname);
   return [{ label: item?.label ?? "Resumen" }];
 }
 

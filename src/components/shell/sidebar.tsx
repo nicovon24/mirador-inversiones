@@ -2,22 +2,47 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Bell, BookOpen, Briefcase, CandlestickChart, GraduationCap, LayoutGrid, Microscope, Plus, Settings, Star } from "lucide-react";
+import { Bell, Briefcase, CandlestickChart, GraduationCap, LayoutGrid, Microscope, Plus, Settings, Star } from "lucide-react";
 import { Brand } from "@/components/brand";
 import { NewWatchlistDialog } from "@/components/watchlist/new-watchlist-dialog";
 import { cn } from "@/lib/utils";
 
-export const NAV = [
-  { href: "/", label: "Resumen", icon: LayoutGrid },
-  { href: "/markets", label: "Mercados", icon: CandlestickChart },
-  { href: "/research", label: "Investigación", icon: Microscope },
-  { href: "/watchlist", label: "Watchlist", icon: Star },
-  { href: "/portfolio", label: "Portafolio", icon: Briefcase },
-  { href: "/alerts", label: "Alertas de precio", icon: Bell },
-  { href: "/learn", label: "Aprender", icon: GraduationCap },
-  { href: "/glossary", label: "Glosario", icon: BookOpen },
-  { href: "/settings", label: "Ajustes", icon: Settings },
-] as const;
+type NavItem = {
+  href: string;
+  label: string;
+  icon: typeof LayoutGrid;
+  /** Otras rutas que activan este link (p. ej. el glosario vive bajo "Guías y glosario"). */
+  also?: string[];
+};
+
+/** Navegación agrupada por propósito: lo del mercado, lo propio y lo para aprender. */
+export const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
+  {
+    label: "Mercado",
+    items: [
+      { href: "/", label: "Resumen", icon: LayoutGrid },
+      { href: "/markets", label: "Mercados", icon: CandlestickChart },
+      { href: "/research", label: "Investigación", icon: Microscope },
+    ],
+  },
+  {
+    label: "Mis inversiones",
+    items: [
+      { href: "/portfolio", label: "Portafolio", icon: Briefcase },
+      { href: "/watchlist", label: "Favoritos", icon: Star },
+      { href: "/alerts", label: "Alertas de precio", icon: Bell },
+    ],
+  },
+  {
+    label: "Aprender",
+    items: [{ href: "/learn", label: "Guías y glosario", icon: GraduationCap, also: ["/glossary"] }],
+  },
+];
+
+export const SETTINGS_NAV: NavItem = { href: "/settings", label: "Ajustes", icon: Settings };
+
+/** Lista plana para el buscador (Ctrl K) y el título de la barra superior. */
+export const NAV: NavItem[] = [...NAV_GROUPS.flatMap((g) => g.items), SETTINGS_NAV];
 
 export interface SidebarProps {
   watchlists: { id: string; name: string; count: number }[];
@@ -25,45 +50,62 @@ export interface SidebarProps {
   onNavigate?: () => void;
 }
 
-function isActive(pathname: string, href: string) {
-  return href === "/" ? pathname === "/" : pathname.startsWith(href);
+export function isActive(pathname: string, item: Pick<NavItem, "href" | "also">) {
+  if (item.href === "/") return pathname === "/";
+  return [item.href, ...(item.also ?? [])].some((h) => pathname === h || pathname.startsWith(`${h}/`));
 }
 
-export function SidebarContent({ watchlists, alertCount, onNavigate }: SidebarProps) {
-  const pathname = usePathname();
+/** Link del menú que corresponde a una ruta. */
+export function navItemFor(pathname: string): NavItem | undefined {
+  return NAV.find((n) => isActive(pathname, n));
+}
 
+function NavLink({ item, alertCount, onNavigate }: { item: NavItem; alertCount: number; onNavigate?: () => void }) {
+  const pathname = usePathname();
+  const active = isActive(pathname, item);
+  const Icon = item.icon;
+  return (
+    <Link
+      href={item.href}
+      onClick={onNavigate}
+      aria-current={active ? "page" : undefined}
+      className={cn(
+        "group flex h-9 items-center gap-3 rounded-lg px-2.5 text-sm text-sidebar-foreground/80 transition-colors outline-none",
+        "hover:bg-sidebar-accent/60 hover:text-sidebar-foreground focus-visible:ring-3 focus-visible:ring-ring/50",
+        active && "bg-sidebar-accent font-medium text-sidebar-accent-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+      )}
+    >
+      <Icon className="size-[18px] shrink-0" aria-hidden />
+      <span className="flex-1">{item.label}</span>
+      {item.href === "/alerts" && alertCount > 0 && (
+        <span className="num rounded-md bg-muted px-1.5 text-[11px] leading-5 font-medium text-muted-foreground group-aria-[current=page]:bg-card">
+          {alertCount}
+        </span>
+      )}
+    </Link>
+  );
+}
+
+const GROUP_LABEL = "px-2.5 pb-2 text-[11px] font-medium tracking-[0.08em] text-muted-foreground uppercase";
+
+export function SidebarContent({ watchlists, alertCount, onNavigate }: SidebarProps) {
   return (
     <div className="flex h-full flex-col gap-6 px-3 py-5">
       <Link href="/" onClick={onNavigate} className="rounded-lg px-2 focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none">
         <Brand />
       </Link>
 
-      <nav aria-label="Principal" className="flex flex-col gap-0.5">
-        <p className="px-2.5 pb-2 text-[11px] font-medium tracking-[0.08em] text-muted-foreground uppercase">Espacio</p>
-        {NAV.map(({ href, label, icon: Icon }) => {
-          const active = isActive(pathname, href);
-          return (
-            <Link
-              key={href}
-              href={href}
-              onClick={onNavigate}
-              aria-current={active ? "page" : undefined}
-              className={cn(
-                "group flex h-9 items-center gap-3 rounded-lg px-2.5 text-sm text-sidebar-foreground/80 transition-colors outline-none",
-                "hover:bg-sidebar-accent/60 hover:text-sidebar-foreground focus-visible:ring-3 focus-visible:ring-ring/50",
-                active && "bg-sidebar-accent font-medium text-sidebar-accent-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
-              )}
-            >
-              <Icon className="size-[18px] shrink-0" aria-hidden />
-              <span className="flex-1">{label}</span>
-              {href === "/alerts" && alertCount > 0 && (
-                <span className="num rounded-md bg-muted px-1.5 text-[11px] leading-5 font-medium text-muted-foreground group-aria-[current=page]:bg-card">
-                  {alertCount}
-                </span>
-              )}
-            </Link>
-          );
-        })}
+      <nav aria-label="Principal" className="flex flex-col gap-5">
+        {NAV_GROUPS.map((g, i) => (
+          <div key={g.label} role="group" aria-labelledby={`nav-group-${i}`} className="flex flex-col gap-0.5">
+            <p id={`nav-group-${i}`} className={GROUP_LABEL}>
+              {g.label}
+            </p>
+            {g.items.map((item) => (
+              <NavLink key={item.href} item={item} alertCount={alertCount} onNavigate={onNavigate} />
+            ))}
+          </div>
+        ))}
       </nav>
 
       <div className="flex flex-col gap-0.5 border-t pt-5">
@@ -97,6 +139,10 @@ export function SidebarContent({ watchlists, alertCount, onNavigate }: SidebarPr
             </Link>
           );
         })}
+      </div>
+
+      <div className="mt-auto border-t pt-3">
+        <NavLink item={SETTINGS_NAV} alertCount={alertCount} onNavigate={onNavigate} />
       </div>
     </div>
   );

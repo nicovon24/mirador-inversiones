@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
-import { ArrowRight, BookOpen } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import Link from "next/link";
+import { LearnTabs } from "@/components/help/learn-tabs";
 import { PageHeader } from "@/components/page-header";
 import { GUIDES } from "@/lib/guides";
 
@@ -11,14 +12,9 @@ export default function LearnPage() {
     <div className="flex flex-col gap-6">
       <PageHeader
         title="Aprender"
-        description="Guías paso a paso para leer los datos y entender qué estás mirando."
-        actions={
-          <Link href="/glossary" className="inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:underline">
-            <BookOpen className="size-4" aria-hidden />
-            Glosario
-          </Link>
-        }
+        description="Guías paso a paso para leer los datos y un glosario con cada término en lenguaje simple."
       />
+      <LearnTabs active="guides" />
       <ul className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         {GUIDES.map((g) => (
           <li key={g.slug}>
