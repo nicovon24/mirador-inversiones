@@ -6,6 +6,7 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import { getQuote, parseKey } from "@/lib/market";
 import { DEFAULT_WATCHLIST } from "./queries";
+import { refreshResearchUniverse } from "./research-table";
 
 export type ActionResult<T = undefined> = { ok: true; data?: T } | { ok: false; error: string };
 
@@ -234,4 +235,9 @@ export async function sendTelegramTest() {
     }
     await sendMessage(settings.telegramChatId, "🔔 Prueba de Mirador: las alertas llegan a este chat.");
   });
+}
+
+/** Botón "Actualizar datos" de Investigación: baja lo vencido o faltante, favoritos primero. */
+export async function refreshResearchData(): Promise<ActionResult<{ updated: number }>> {
+  return run(async () => ({ updated: await refreshResearchUniverse(20) }));
 }

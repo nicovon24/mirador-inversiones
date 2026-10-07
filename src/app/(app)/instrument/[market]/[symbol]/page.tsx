@@ -8,7 +8,7 @@ import { hasFinnhub } from "@/lib/env";
 import { formatNumber } from "@/lib/format";
 import { finnhubMetrics } from "@/lib/market/finnhub";
 import { getAlerts, getWatchlists } from "@/server/queries";
-import { resolveFundamentals } from "@/server/research";
+import { resolveFundamentalsAsync } from "@/server/research";
 import { describeRule } from "@/lib/alerts";
 import { findBond } from "@/lib/bonds";
 import { CEDEAR_RATIOS } from "@/lib/cedears";
@@ -52,6 +52,7 @@ export default async function InstrumentPage({ params }: { params: Promise<Param
   const item = watchlists.flatMap((w) => w.items).find((i) => i.key === key);
   const myAlerts = alerts.filter((a) => a.key === key);
   const info = instrumentInfo(p.market, p.symbol);
+  const hasFundamentals = Boolean(await resolveFundamentalsAsync(p.market, p.symbol));
   const bond = p.market === "AR" ? findBond(p.symbol) : undefined;
   const cedearBase = CEDEAR_RATIOS[p.symbol.replace(/[CD]$/, "")] ? p.symbol.replace(/[CD]$/, "") : p.symbol;
   const cedearSymbol = p.market === "AR" && CEDEAR_RATIOS[cedearBase] ? cedearBase : null;
@@ -92,7 +93,7 @@ export default async function InstrumentPage({ params }: { params: Promise<Param
           <p className="mt-3 text-[11px] text-muted-foreground">Explicación general, no una recomendación de inversión.</p>
         </section>
 
-        {resolveFundamentals(p.market, p.symbol) && (
+        {hasFundamentals && (
           <Link
             href={`/research?s=${p.market}:${encodeURIComponent(p.symbol)}`}
             className="rounded-xl border bg-card p-4 text-sm font-medium text-primary transition-colors hover:border-primary/50"

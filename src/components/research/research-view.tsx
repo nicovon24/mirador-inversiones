@@ -1,32 +1,11 @@
 import { ExternalLink } from "lucide-react";
 import Link from "next/link";
 import { HelpTip } from "@/components/help/help-tip";
-import { formatDate, formatMoney, formatNumber, formatPercent, formatTime } from "@/lib/format";
-import { compareSentence, PEER_METRICS, RESEARCH_GROUPS, type MetricDef } from "@/lib/research";
+import { formatDate, formatNumber, formatPercent, formatTime } from "@/lib/format";
+import { compareSentence, PEER_METRICS, RESEARCH_GROUPS } from "@/lib/research";
+import { formatMetric } from "@/lib/research-format";
 import { cn } from "@/lib/utils";
 import type { Research } from "@/server/research";
-
-function formatMetric(value: number | null, def: Pick<MetricDef, "format">): string {
-  if (value === null) return "—";
-  switch (def.format) {
-    case "pct":
-      return `${formatNumber(value)} %`;
-    case "signedPct":
-      return formatPercent(value);
-    case "money":
-      return formatMoney(value, "USD");
-    case "millions":
-      return value >= 1_000_000
-        ? `US$ ${formatNumber(value / 1_000_000, 2)} billones`
-        : value >= 1_000
-          ? `US$ ${formatNumber(value / 1_000, 1)} mil M`
-          : `US$ ${formatNumber(value, 0)} M`;
-    case "times":
-      return `${formatNumber(value)}x`;
-    default:
-      return formatNumber(value);
-  }
-}
 
 const SOURCE_NOTE: Record<Research["source"], (s: string) => string> = {
   direct: () => "",

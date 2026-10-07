@@ -1,6 +1,7 @@
 import "server-only";
 import { findCompany, sectorPeerAdrs } from "@/lib/companies";
 import { hasFinnhub } from "@/lib/env";
+import { getPanel } from "@/lib/market";
 import {
   finnhubEarnings,
   finnhubPeers,
@@ -53,13 +54,32 @@ export function resolveFundamentals(market: "AR" | "US", symbol: string): { symb
   return { symbol: c.adr, source: c.type === "CEDEAR" ? "cedear" : "adr" };
 }
 
+/**
+ * Igual que `resolveFundamentals`, pero además reconoce CEDEARs que no están en el catálogo
+ * buscándolos en el panel de CEDEARs de BYMA: si el ticker está ahí, sus datos son los de la acción original.
+ * No se adivina para acciones locales: el mismo ticker en EE.UU. puede ser otra empresa.
+ */
+export async function resolveFundamentalsAsync(
+  market: "AR" | "US",
+  symbol: string,
+): Promise<{ symbol: string; source: ResearchSource } | null> {
+  const known = resolveFundamentals(market, symbol);
+  if (known || market !== "AR" || symbol.startsWith("^") || findCompany(symbol)) return known;
+  const cedears = await getPanel("cedears").catch(() => []);
+  const set = new Set(cedears.map((q) => q.symbol));
+  if (!set.has(symbol)) return null;
+  // AAPLD / AAPLC son la misma especie en dólares: el subyacente es el ticker sin el sufijo.
+  const base = /[CD]$/.test(symbol) && set.has(symbol.slice(0, -1)) ? symbol.slice(0, -1) : symbol;
+  return { symbol: base, source: "cedear" };
+}
+
 const MAX_PEERS = 5;
 
 export async function getResearch(market: "AR" | "US", symbol: string): Promise<ResearchResult> {
   if (!hasFinnhub)
     return { ok: false, reason: "no-key", message: "Falta configurar FINNHUB_API_KEY para ver datos fundamentales." };
 
-  const target = resolveFundamentals(market, symbol);
+  const target = await resolveFundamentalsAsync(market, symbol);
   if (!target) {
     const c = market === "AR" ? findCompany(symbol) : undefined;
     return {
