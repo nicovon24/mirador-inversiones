@@ -3,20 +3,21 @@
 import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { requireUser } from "@/server/auth/session";
+import { destroyIdentity, getOrCreateIdentity, verifySession } from "@/server/auth/session";
 import { IolError } from "./errors";
 import { flowCookieSecure, IOL_CALLBACK_PATH, IOL_FLOW_COOKIE, iol } from "./index";
 import { safeReturnTo } from "./session-service";
 
 /**
- * Inicia la conexión con IOL: verifica al usuario, registra el flujo y redirige a IOL para el login y
- * el consentimiento. La contraseña de IOL nunca pasa por esta app.
+ * "Ver mi portafolio de IOL": el login es el de IOL. Se identifica al navegador (o se le crea una identidad
+ * anónima), se registra el flujo y se redirige a IOL para el login y el consentimiento.
+ * La contraseña de IOL nunca pasa por esta app.
  */
 export async function connectIol(formData: FormData): Promise<void> {
-  const user = await requireUser();
   const returnTo = safeReturnTo(String(formData.get("returnTo") ?? ""));
   const services = iol();
   if (!services) redirect(`${returnTo}?iol=not_configured`);
+  const user = await getOrCreateIdentity();
 
   let authorizeUrl: string;
   let state: string;
@@ -39,10 +40,9 @@ export async function connectIol(formData: FormData): Promise<void> {
   redirect(authorizeUrl);
 }
 
-/** Desconecta IOL borrando la conexión local (tokens incluidos). */
+/** Desconecta IOL: borra la conexión, los tokens y la identidad de este navegador. */
 export async function disconnectIol(): Promise<void> {
-  const user = await requireUser();
-  await iol()?.session.disconnect(user.id);
+  const user = await verifySession();
+  if (user) await destroyIdentity(user.id);
   revalidatePath("/portfolio");
-  revalidatePath("/settings");
 }

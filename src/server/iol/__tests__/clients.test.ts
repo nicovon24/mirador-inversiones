@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { createTokenCipher, DecryptionError, hashPassword, pkceChallenge, safeEqualStrings, verifyPassword } from "@/lib/security/crypto";
+import { createTokenCipher, DecryptionError, pkceChallenge, safeEqualStrings } from "@/lib/security/crypto";
 import { IolError } from "../errors";
 import { ALLOWED_READ_TOOLS, createIolGateway } from "../gateway";
 import { createMcpClient, payloadOf } from "../mcp-client";
@@ -27,15 +27,6 @@ describe("crypto", () => {
 
   it("PKCE S256 coincide con el ejemplo del RFC 7636", () => {
     expect(pkceChallenge("dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk")).toBe("E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM");
-  });
-
-  it("hashea contraseñas con scrypt y sal aleatoria", async () => {
-    const h = await hashPassword("una-contraseña-larga");
-    expect(h.startsWith("scrypt$")).toBe(true);
-    expect(await hashPassword("una-contraseña-larga")).not.toBe(h);
-    expect(await verifyPassword("una-contraseña-larga", h)).toBe(true);
-    expect(await verifyPassword("otra", h)).toBe(false);
-    expect(await verifyPassword("x", "formato-raro")).toBe(false);
   });
 
   it("compara strings en tiempo constante sin aceptar vacíos", () => {

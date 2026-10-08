@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { PageHeader } from "@/components/page-header";
 import { AddPositionDialog } from "@/components/portfolio/add-position-dialog";
-import { IolConnectionCard, IolLoginPrompt, IolResultNotice } from "@/components/portfolio/iol-connection-card";
+import { IolConnectionCard, IolResultNotice } from "@/components/portfolio/iol-connection-card";
 import { PortfolioScreen } from "@/components/portfolio/portfolio-screen";
 import { hasIol } from "@/lib/env";
 import { getIolCash, getIolPortfolio, type BrokerCash, type BrokerHolding } from "@/lib/market/iol";
@@ -15,7 +15,7 @@ import { getPositions } from "@/server/queries";
 export const metadata: Metadata = { title: "Portafolio" };
 
 export default async function PortfolioPage({ searchParams }: { searchParams: Promise<{ iol?: string }> }) {
-  // La página es abierta: solo la cartera real de IOL necesita sesión.
+  // La página es abierta. La cartera real de IOL se ve solo en el navegador que la conectó (login con IOL).
   const user = await verifySession();
   const { iol: iolResult } = await searchParams;
   const services = iol();
@@ -62,12 +62,7 @@ export default async function PortfolioPage({ searchParams }: { searchParams: Pr
         actions={<AddPositionDialog />}
       />
       <IolResultNotice result={iolResult} />
-      {!legacy &&
-        (user ? (
-          <IolConnectionCard status={status} configured={Boolean(services)} email={user.email} />
-        ) : (
-          <IolLoginPrompt />
-        ))}
+      {!legacy && <IolConnectionCard status={status} configured={Boolean(services)} />}
       <PortfolioScreen broker={broker} brokerError={brokerError} cash={cash} manual={manual} iolConfigured={brokerConnected} />
     </div>
   );

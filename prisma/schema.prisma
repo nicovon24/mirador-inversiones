@@ -115,21 +115,18 @@ model Notification {
   @@index([read, createdAt])
 }
 
-/// Usuario de la app. Se crea con `npm run user:create`; no hay registro público.
+/// Identidad anónima de un navegador que conectó su cuenta de IOL. No tiene email ni contraseña:
+/// el login es el de IOL (OAuth + PKCE) y esta fila solo ata la cookie de sesión a la conexión.
 model User {
-  id           String   @id @default(cuid())
-  email        String   @unique
-  /// scrypt: "scrypt$N$r$p$salt$hash" (base64url).
-  passwordHash String
-  name         String?
-  createdAt    DateTime @default(now())
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
 
   sessions              Session[]
   iolConnection         IolConnection?
   pendingAuthorizations PendingAuthorization[]
 }
 
-/// Sesión de login. El id es SHA-256 del token de la cookie: un volcado de la base no permite reusar sesiones.
+/// Sesión del navegador. El id es SHA-256 del token de la cookie: un volcado de la base no permite reusar sesiones.
 model Session {
   id        String   @id
   userId    String

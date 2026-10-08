@@ -1,4 +1,4 @@
-import { createCipheriv, createDecipheriv, createHash, randomBytes, scrypt, timingSafeEqual } from "node:crypto";
+import { createCipheriv, createDecipheriv, createHash, randomBytes, timingSafeEqual } from "node:crypto";
 
 /** Solo para código de servidor: usa node:crypto. Sin "server-only" para poder testearlo con Vitest. */
 
@@ -65,28 +65,4 @@ export function safeEqualStrings(a: string | null | undefined, b: string | null 
   const ba = Buffer.from(a);
   const bb = Buffer.from(b);
   return ba.length === bb.length && timingSafeEqual(ba, bb);
-}
-
-// ---------- Contraseñas ----------
-
-const SCRYPT = { N: 16_384, r: 8, p: 1, keylen: 64 } as const;
-
-function scryptAsync(password: string, salt: Buffer, N: number, r: number, p: number, keylen: number): Promise<Buffer> {
-  return new Promise((resolve, reject) =>
-    scrypt(password, salt, keylen, { N, r, p, maxmem: 64 * 1024 * 1024 }, (err, key) => (err ? reject(err) : resolve(key))),
-  );
-}
-
-export async function hashPassword(password: string): Promise<string> {
-  const salt = randomBytes(16);
-  const hash = await scryptAsync(password.normalize("NFKC"), salt, SCRYPT.N, SCRYPT.r, SCRYPT.p, SCRYPT.keylen);
-  return ["scrypt", SCRYPT.N, SCRYPT.r, SCRYPT.p, salt.toString("base64url"), hash.toString("base64url")].join("$");
-}
-
-export async function verifyPassword(password: string, stored: string): Promise<boolean> {
-  const [algo, n, r, p, salt, hash] = stored.split("$");
-  if (algo !== "scrypt" || !salt || !hash) return false;
-  const expected = Buffer.from(hash, "base64url");
-  const actual = await scryptAsync(password.normalize("NFKC"), Buffer.from(salt, "base64url"), Number(n), Number(r), Number(p), expected.length);
-  return actual.length === expected.length && timingSafeEqual(actual, expected);
 }

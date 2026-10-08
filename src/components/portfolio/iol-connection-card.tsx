@@ -1,14 +1,12 @@
-import { CheckCircle2, Link2, Link2Off, Lock, LogOut, ShieldCheck } from "lucide-react";
-import Link from "next/link";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { CheckCircle2, Link2Off, Lock, ShieldCheck } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { formatDate } from "@/lib/format";
-import { logout } from "@/server/auth/actions";
 import { connectIol, disconnectIol } from "@/server/iol/actions";
 import type { IolStatus } from "@/server/iol/session-service";
 
 /** Mensajes del resultado del callback (?iol=...). Ninguno repite datos de IOL. */
 const RESULT_MESSAGE: Record<string, { tone: "ok" | "warn"; text: string }> = {
-  connected: { tone: "ok", text: "Tu cuenta de IOL quedó conectada." },
+  connected: { tone: "ok", text: "Listo: ya ves tu portafolio de IOL." },
   denied: { tone: "warn", text: "No se conectó IOL: cancelaste o rechazaste el permiso." },
   expired: { tone: "warn", text: "El pedido de conexión venció. Volvé a intentarlo." },
   invalid: { tone: "warn", text: "El pedido de conexión no es válido o ya se usó. Volvé a intentarlo desde esta pantalla." },
@@ -35,73 +33,51 @@ export function IolResultNotice({ result }: { result?: string }) {
   );
 }
 
-/** Sin sesión: el único lugar de la app que pide login es ver la cartera real de IOL. */
-export function IolLoginPrompt() {
+/** Tarjeta de Portafolio: el único lugar que pide login, y ese login es el de IOL. */
+export function IolConnectionCard({ status, configured }: { status: IolStatus; configured: boolean }) {
+  if (status.connected) {
+    return (
+      <section className="flex flex-wrap items-center gap-4 rounded-xl border bg-card p-4" aria-label="Conexión con InvertirOnline">
+        <ShieldCheck className="size-5 shrink-0 text-primary" aria-hidden />
+        <div className="min-w-0 flex-1">
+          <p className="font-medium">Portafolio de IOL conectado</p>
+          <p className="text-xs leading-relaxed text-muted-foreground">
+            Acceso de solo lectura desde este navegador
+            {status.absoluteExpiresAt ? `, hasta el ${formatDate(status.absoluteExpiresAt)} (${status.daysLeft} días)` : ""}. Después
+            hay que volver a ingresar con IOL.
+          </p>
+        </div>
+        <form action={disconnectIol}>
+          <Button type="submit" variant="outline" size="sm">
+            <Link2Off /> Desconectar
+          </Button>
+        </form>
+      </section>
+    );
+  }
+
   return (
     <section className="flex flex-wrap items-center gap-4 rounded-xl border bg-card p-4" aria-label="Portafolio de InvertirOnline">
       <Lock className="size-5 shrink-0 text-primary" aria-hidden />
       <div className="min-w-0 flex-1">
         <p className="font-medium">Tu portafolio de InvertirOnline</p>
         <p className="text-xs leading-relaxed text-muted-foreground">
-          Para ver tu cartera y tus saldos reales de IOL tenés que iniciar sesión. El resto de la app se usa sin login.
+          Ingresás con tu usuario de IOL en la página de IOL: esta app nunca ve tu contraseña y solo puede leer tu cartera y tus
+          saldos, nunca operar.
         </p>
       </div>
-      {/* Link con estilo de botón: navegar no es una acción, así no hace falta un <button>. */}
-      <Link href="/login" className={buttonVariants({ size: "sm" })}>
-        <Lock /> Ver mi portafolio de IOL
-      </Link>
-    </section>
-  );
-}
-
-export function IolConnectionCard({
-  status,
-  configured,
-  email,
-  returnTo = "/portfolio",
-}: {
-  status: IolStatus;
-  configured: boolean;
-  email: string;
-  returnTo?: "/portfolio" | "/settings";
-}) {
-  return (
-    <section className="flex flex-wrap items-center gap-4 rounded-xl border bg-card p-4" aria-label="Conexión con InvertirOnline">
-      <ShieldCheck className="size-5 shrink-0 text-primary" aria-hidden />
-      <div className="min-w-0 flex-1">
-        <p className="font-medium">{status.connected ? "IOL conectado" : "Conectá tu cuenta de InvertirOnline"}</p>
-        <p className="text-xs leading-relaxed text-muted-foreground">
-          {status.connected && status.absoluteExpiresAt
-            ? `Acceso de solo lectura. Vence el ${formatDate(status.absoluteExpiresAt)} (${status.daysLeft} días): después hay que autorizar de nuevo.`
-            : "Iniciás sesión en IOL y das el permiso allá: esta app nunca ve tu contraseña y solo puede leer tu cartera y tus saldos, nunca operar."}
-          <span className="block">Sesión iniciada como {email}.</span>
-        </p>
-      </div>
-      <div className="flex flex-wrap items-center gap-2">
-        {!configured ? (
-          <p className="text-xs text-muted-foreground">
-            Falta configurar <code className="font-mono">IOL_SESSION_SECRET</code>.
-          </p>
-        ) : status.connected ? (
-          <form action={disconnectIol}>
-            <Button type="submit" variant="outline" size="sm">
-              <Link2Off /> Desconectar IOL
-            </Button>
-          </form>
-        ) : (
-          <form action={connectIol}>
-            <input type="hidden" name="returnTo" value={returnTo} />
-            <Button type="submit" size="sm">
-              <Link2 /> Conectar IOL
-            </Button>
-          </form>
-        )}
-        <form action={logout}>
-          <Button type="submit" variant="ghost" size="sm">
-            <LogOut /> Cerrar sesión
+      {configured ? (
+        <form action={connectIol}>
+          <input type="hidden" name="returnTo" value="/portfolio" />
+          <Button type="submit" size="sm">
+            <Lock /> Ver mi portafolio de IOL
           </Button>
         </form>
-      </div>
+      ) : (
+        <p className="text-xs text-muted-foreground">
+          Falta configurar <code className="font-mono">IOL_SESSION_SECRET</code>.
+        </p>
+      )}
     </section>
   );
 }

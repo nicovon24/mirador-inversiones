@@ -1,25 +1,48 @@
 import "server-only";
 import { cookies } from "next/headers";
-import { redirect } from "next/navigation";
 import { cache } from "react";
 import { db } from "@/lib/db";
 import { randomUrlSafe, sha256Hex } from "@/lib/security/crypto";
 
-/** Cookie de sesión. Solo hace falta para ver y conectar la cartera de IOL; el resto de la app es abierto. */
+/**
+ * Identidad del navegador para la conexión con IOL. La app no tiene login propio: el login es el de IOL
+ * (OAuth + PKCE). Esta cookie solo ata el navegador a su conexión, para que cada uno vea su propia cartera.
+ */
 export const SESSION_COOKIE = "mirador_session";
+/** Igual que el límite absoluto de la conexión con IOL: pasado ese plazo hay que autorizar de nuevo. */
 const SESSION_TTL_MS = 30 * 24 * 3_600_000;
 
-export interface CurrentUser {
+export interface BrowserIdentity {
   id: string;
-  email: string;
-  name: string | null;
 }
 
-/** Crea la sesión en la base y la cookie. En la base queda solo el hash del token. */
-export async function createSession(userId: string): Promise<void> {
+/** Identidad del navegador actual o null. Se valida contra la base en cada pedido (memoizado por render). */
+export const verifySession = cache(async (): Promise<BrowserIdentity | null> => {
+  const token = (await cookies()).get(SESSION_COOKIE)?.value;
+  if (!token) return null;
+  const session = await db.session.findUnique({ where: { id: sha256Hex(token) } });
+  if (!session || session.expiresAt.getTime() <= Date.now()) return null;
+  return { id: session.userId };
+});
+
+/**
+ * Devuelve la identidad del navegador o crea una nueva con su cookie. Solo se llama al conectar IOL,
+ * así que navegar la app nunca crea filas. De paso limpia identidades abandonadas.
+ */
+export async function getOrCreateIdentity(): Promise<BrowserIdentity> {
+  const existing = await verifySession();
+  if (existing) return existing;
+
+  const now = new Date();
+  // Identidades sin conexión con IOL y sin sesión vigente: flujos que nunca se completaron.
+  await db.user.deleteMany({
+    where: { iolConnection: null, sessions: { none: { expiresAt: { gt: now } } }, createdAt: { lt: new Date(now.getTime() - 86_400_000) } },
+  });
+
+  const user = await db.user.create({ data: {} });
   const token = randomUrlSafe(32);
-  const expiresAt = new Date(Date.now() + SESSION_TTL_MS);
-  await db.session.create({ data: { id: sha256Hex(token), userId, expiresAt } });
+  const expiresAt = new Date(now.getTime() + SESSION_TTL_MS);
+  await db.session.create({ data: { id: sha256Hex(token), userId: user.id, expiresAt } });
   (await cookies()).set(SESSION_COOKIE, token, {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
@@ -27,30 +50,11 @@ export async function createSession(userId: string): Promise<void> {
     path: "/",
     expires: expiresAt,
   });
+  return { id: user.id };
 }
 
-/**
- * Usuario de la sesión actual o null. Valida contra la base en cada pedido (memoizado por render),
- * así una sesión borrada o vencida deja de servir al instante.
- */
-export const verifySession = cache(async (): Promise<CurrentUser | null> => {
-  const token = (await cookies()).get(SESSION_COOKIE)?.value;
-  if (!token) return null;
-  const session = await db.session.findUnique({ where: { id: sha256Hex(token) }, include: { user: true } });
-  if (!session || session.expiresAt.getTime() <= Date.now()) return null;
-  return { id: session.user.id, email: session.user.email, name: session.user.name };
-});
-
-/** Para las acciones de IOL: devuelve el usuario o manda al login (que vuelve a Portafolio). */
-export async function requireUser(): Promise<CurrentUser> {
-  const user = await verifySession();
-  if (!user) redirect("/login");
-  return user;
-}
-
-export async function deleteSession(): Promise<void> {
-  const store = await cookies();
-  const token = store.get(SESSION_COOKIE)?.value;
-  if (token) await db.session.deleteMany({ where: { id: sha256Hex(token) } });
-  store.delete(SESSION_COOKIE);
+/** Borra la identidad del navegador: en cascada se van su sesión, su conexión con IOL y los tokens. */
+export async function destroyIdentity(userId: string): Promise<void> {
+  await db.user.deleteMany({ where: { id: userId } });
+  (await cookies()).delete(SESSION_COOKIE);
 }
