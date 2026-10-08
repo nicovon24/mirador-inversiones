@@ -23,6 +23,8 @@ export interface ResearchRow {
   stale: boolean;
   /** Precios del período elegido, reducidos para el sparkline. Vacío si no hay histórico. */
   spark: number[];
+  /** Fechas (unix, segundos) de cada punto del sparkline. */
+  sparkTimes: number[];
   /** Variación del precio en el período elegido (%). */
   periodChangePct: number | null;
 }

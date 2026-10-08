@@ -71,6 +71,7 @@ export function useSearch(query: string) {
 
 export interface SparkSeriesView {
   points: number[];
+  times: number[];
   changePct: number | null;
 }
 

@@ -183,9 +183,17 @@ export function MarketsTable({ watchedKeys }: { watchedKeys: string[] }) {
                   </td>
                   <td className="px-4 py-2">
                     {spark || sparksLoading ? (
-                      <Sparkline values={spark?.points ?? []} width={88} height={26} />
+                      <Sparkline
+                        values={spark?.points ?? []}
+                        times={spark?.times}
+                        width={88}
+                        height={26}
+                        formatValue={(v) => formatMoney(v, q.currency)}
+                      />
                     ) : (
-                      <span className="text-muted-foreground">—</span>
+                      <span className="text-muted-foreground" title="No hay histórico gratuito para este instrumento">
+                        —
+                      </span>
                     )}
                   </td>
                   <td className="px-4 py-2 text-right">

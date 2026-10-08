@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { downsample, parsePeriod, periodChangePct } from "../series";
+import { downsample, parsePeriod, periodChangePct, sampleIndices } from "../series";
 
 describe("downsample", () => {
   it("no toca series cortas", () => {
@@ -44,5 +44,15 @@ describe("parsePeriod", () => {
     expect(parsePeriod("1D")).toBe("1M");
     expect(parsePeriod("x")).toBe("1M");
     expect(parsePeriod(undefined)).toBe("1M");
+  });
+});
+
+describe("sampleIndices", () => {
+  it("devuelve los mismos índices para fechas y precios, con extremos incluidos", () => {
+    const idx = sampleIndices(100, 10);
+    expect(idx).toHaveLength(10);
+    expect(idx[0]).toBe(0);
+    expect(idx.at(-1)).toBe(99);
+    expect(sampleIndices(3, 10)).toEqual([0, 1, 2]);
   });
 });

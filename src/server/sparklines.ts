@@ -1,9 +1,11 @@
 import "server-only";
 import { getHistory, parseKey } from "@/lib/market";
-import { downsample, periodChangePct, type PeriodRange } from "@/lib/series";
+import { periodChangePct, sampleIndices, type PeriodRange } from "@/lib/series";
 
 export interface SparkSeries {
   points: number[];
+  /** Fecha (unix, segundos) de cada punto, para el tooltip. */
+  times: number[];
   changePct: number | null;
 }
 
@@ -26,8 +28,16 @@ export async function getSparkSeries(keys: string[], range: PeriodRange): Promis
       const parsed = parseKey(key);
       if (!parsed) continue;
       try {
-        const closes = (await getHistory(parsed.market, parsed.symbol, range)).map((c) => c.close);
-        if (closes.length >= 2) out[key] = { points: downsample(closes), changePct: periodChangePct(closes) };
+        const candles = (await getHistory(parsed.market, parsed.symbol, range)).filter((c) => Number.isFinite(c.close));
+        if (candles.length >= 2) {
+          const idx = sampleIndices(candles.length);
+          const closes = candles.map((c) => c.close);
+          out[key] = {
+            points: idx.map((i) => closes[i]),
+            times: idx.map((i) => candles[i].time),
+            changePct: periodChangePct(closes),
+          };
+        }
       } catch {
         // Sin histórico para este instrumento: la fila muestra "—".
       }

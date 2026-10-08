@@ -71,6 +71,7 @@ function toRow(b: Base, f: FundamentalsRow | undefined, s: SparkSeries | undefin
   return {
     ...b,
     spark: s?.points ?? [],
+    sparkTimes: s?.times ?? [],
     periodChangePct: s?.changePct ?? null,
     // El rubro del catálogo manda; si no hay, el de Finnhub traducido.
     sector: b.sector ?? sectorEs(f?.profile?.finnhubIndustry),

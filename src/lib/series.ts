@@ -1,16 +1,19 @@
 /** Utilidades para series de precios chicas (sparklines). Sin dependencias de servidor. */
 
 /**
- * Reduce una serie a `n` puntos tomando muestras equiespaciadas y conservando siempre el primero y el último,
- * que son los que definen la variación del período.
+ * Índices equiespaciados para reducir una serie de `length` puntos a `n`, conservando siempre el primero
+ * y el último (los que definen la variación del período). Sirve para reducir fechas y precios por igual.
  */
+export function sampleIndices(length: number, n = 48): number[] {
+  if (length <= n || n < 2) return Array.from({ length }, (_, i) => i);
+  const step = (length - 1) / (n - 1);
+  return Array.from({ length: n }, (_, i) => Math.round(i * step));
+}
+
+/** Reduce una serie a `n` puntos (descarta valores no finitos). */
 export function downsample(values: number[], n = 48): number[] {
   const clean = values.filter((v) => Number.isFinite(v));
-  if (clean.length <= n || n < 2) return clean;
-  const out: number[] = [];
-  const step = (clean.length - 1) / (n - 1);
-  for (let i = 0; i < n; i++) out.push(clean[Math.round(i * step)]);
-  return out;
+  return sampleIndices(clean.length, n).map((i) => clean[i]);
 }
 
 /**

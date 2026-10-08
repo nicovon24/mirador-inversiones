@@ -92,7 +92,17 @@ async function withTodayCandle(symbol: string, candles: Candle[]): Promise<Candl
 export async function getHistory(market: MarketCode, symbol: string, range: Range): Promise<Candle[]> {
   const s = symbol.toUpperCase();
   if (market === "US" || s.startsWith("^")) return yahooHistory(s, range);
-  const candles = await firstOk(() => ar().history(s, range), () => data912Provider.history(s, range));
+  // data912 no tiene muchos CEDEARs nuevos (NU, TSM, SNDK…): Yahoo los tiene en BYMA con sufijo .BA, en pesos.
+  const yahooBa = async () => {
+    const c = await yahooHistory(`${s}.BA`, range);
+    if (c.length < 2) throw new Error(`Yahoo sin histórico para ${s}.BA`);
+    return c;
+  };
+  const candles = await firstOk(
+    ...(hasIol ? [() => iolProvider.history(s, range)] : []),
+    () => data912Provider.history(s, range),
+    yahooBa,
+  );
   return withTodayCandle(s, candles);
 }
 

@@ -15,6 +15,7 @@ function row(symbol: string, name: string, patch: Partial<ResearchRow> = {}): Re
     fetchedAt: null,
     stale: false,
     spark: [],
+    sparkTimes: [],
     periodChangePct: null,
     ...patch,
   };

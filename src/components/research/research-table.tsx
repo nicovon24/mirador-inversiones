@@ -114,9 +114,11 @@ export function ResearchTable({
                 </td>
                 <td className="px-3 py-2">
                   {r.spark.length >= 2 ? (
-                    <Sparkline values={r.spark} width={88} height={26} />
+                    <Sparkline values={r.spark} times={r.sparkTimes} width={88} height={26} />
                   ) : (
-                    <span className="text-muted-foreground">—</span>
+                    <span className="text-muted-foreground" title="No hay histórico gratuito para este instrumento">
+                      —
+                    </span>
                   )}
                 </td>
                 <td className={cn("border-r px-3 py-2 text-right", query.orden === PERIOD_CHANGE && "font-medium")}>
