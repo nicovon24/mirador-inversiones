@@ -1,6 +1,7 @@
 /** Tabla comparativa de Investigación: filas, columnas, filtro, orden y paginado. Sin dependencias de servidor. */
 import { matchScore, normalizeText } from "@/lib/companies";
 import { RESEARCH_GROUPS, type MetricDef } from "@/lib/research";
+import { DEFAULT_PERIOD, parsePeriod, type PeriodRange } from "@/lib/series";
 
 export type RowType = "Acción" | "CEDEAR" | "EE.UU.";
 export type RowStatus = "ok" | "empty" | "error" | "pending";
@@ -20,6 +21,10 @@ export interface ResearchRow {
   status: RowStatus;
   fetchedAt: string | null;
   stale: boolean;
+  /** Precios del período elegido, reducidos para el sparkline. Vacío si no hay histórico. */
+  spark: number[];
+  /** Variación del precio en el período elegido (%). */
+  periodChangePct: number | null;
 }
 
 const ALL_METRICS = RESEARCH_GROUPS.flatMap((g) => g.metrics);
@@ -38,7 +43,9 @@ export const TABLE_COLUMNS: (MetricDef & { short: string })[] = [
   { ...byKey("beta"), short: "Beta" },
 ];
 
-export const SORTABLE = new Set(["name", ...TABLE_COLUMNS.map((c) => c.key)]);
+/** Clave de orden de la columna "Var. período" (no es un dato fundamental, sale del histórico de precios). */
+export const PERIOD_CHANGE = "periodChange";
+export const SORTABLE = new Set(["name", PERIOD_CHANGE, ...TABLE_COLUMNS.map((c) => c.key)]);
 export const PAGE_SIZE = 25;
 export const TYPE_FILTERS: { id: string; label: string; type?: RowType }[] = [
   { id: "todas", label: "Todas" },
@@ -81,6 +88,8 @@ export interface TableQuery {
   orden: string;
   dir: "asc" | "desc";
   pag: number;
+  /** Período del sparkline y de la variación. */
+  rango: PeriodRange;
 }
 
 export function parseTableQuery(sp: Record<string, string | string[] | undefined>): TableQuery {
@@ -92,7 +101,7 @@ export function parseTableQuery(sp: Record<string, string | string[] | undefined
   const dir = one("dir") === "desc" ? "desc" : one("dir") === "asc" ? "asc" : orden === "name" ? "asc" : "desc";
   const pag = Math.max(1, Number.parseInt(one("pag"), 10) || 1);
   const tipo = TYPE_FILTERS.some((t) => t.id === one("tipo")) ? one("tipo") : "todas";
-  return { q: one("q"), tipo, sector: one("sector"), orden, dir, pag };
+  return { q: one("q"), tipo, sector: one("sector"), orden, dir, pag, rango: parsePeriod(one("rango")) };
 }
 
 export function matchesQuery(row: ResearchRow, q: TableQuery): boolean {
@@ -108,8 +117,8 @@ export function sortRows(rows: ResearchRow[], orden: string, dir: "asc" | "desc"
   const sign = dir === "asc" ? 1 : -1;
   return [...rows].sort((a, b) => {
     if (orden === "name") return a.name.localeCompare(b.name, "es") * sign;
-    const va = a.metrics[orden] ?? null;
-    const vb = b.metrics[orden] ?? null;
+    const va = orden === PERIOD_CHANGE ? a.periodChangePct : (a.metrics[orden] ?? null);
+    const vb = orden === PERIOD_CHANGE ? b.periodChangePct : (b.metrics[orden] ?? null);
     if (va === null && vb === null) return a.name.localeCompare(b.name, "es");
     if (va === null) return 1;
     if (vb === null) return -1;
@@ -135,6 +144,7 @@ export function tableHref(q: TableQuery, patch: Partial<TableQuery>): string {
   if (next.sector) sp.set("sector", next.sector);
   if (next.orden !== "name") sp.set("orden", next.orden);
   if (next.dir !== (next.orden === "name" ? "asc" : "desc")) sp.set("dir", next.dir);
+  if (next.rango !== DEFAULT_PERIOD) sp.set("rango", next.rango);
   if (next.pag > 1) sp.set("pag", String(next.pag));
   const s = sp.toString();
   return s ? `/research?${s}` : "/research";

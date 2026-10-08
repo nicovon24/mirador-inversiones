@@ -14,6 +14,8 @@ function row(symbol: string, name: string, patch: Partial<ResearchRow> = {}): Re
     status: "ok",
     fetchedAt: null,
     stale: false,
+    spark: [],
+    periodChangePct: null,
     ...patch,
   };
 }
@@ -25,7 +27,7 @@ const aapl = row("AAPL", "Apple", { type: "CEDEAR", sector: "Tecnología", metri
 
 describe("parseTableQuery", () => {
   it("usa valores por defecto seguros", () => {
-    expect(parseTableQuery({})).toEqual({ q: "", tipo: "todas", sector: "", orden: "name", dir: "asc", pag: 1 });
+    expect(parseTableQuery({})).toEqual({ q: "", tipo: "todas", sector: "", orden: "name", dir: "asc", pag: 1, rango: "1M" });
   });
 
   it("descarta columnas, tipos y páginas inválidas", () => {
@@ -82,5 +84,27 @@ describe("tableHref", () => {
   it("conserva el resto al paginar", () => {
     expect(tableHref(base, { pag: 4 })).toBe("/research?q=banco&pag=4");
     expect(tableHref(parseTableQuery({}), {})).toBe("/research");
+  });
+});
+
+describe("período", () => {
+  it("lee el rango de la URL y vuelve a 1M si es inválido", () => {
+    expect(parseTableQuery({ rango: "6M" }).rango).toBe("6M");
+    expect(parseTableQuery({ rango: "1D" }).rango).toBe("1M");
+  });
+
+  it("conserva el rango al ordenar o paginar y lo omite si es el de defecto", () => {
+    const q = parseTableQuery({ rango: "3M" });
+    expect(tableHref(q, { orden: "peTTM" })).toBe("/research?orden=peTTM&rango=3M");
+    expect(tableHref(q, { rango: "1M" })).toBe("/research");
+  });
+
+  it("ordena por variación del período con los nulos al final", () => {
+    const up = row("UP", "Sube", { periodChangePct: 12 });
+    const down = row("DOWN", "Baja", { periodChangePct: -5 });
+    const none = row("NONE", "Sin dato", { periodChangePct: null });
+    expect(sortRows([none, down, up], "periodChange", "desc").map((r) => r.symbol)).toEqual(["UP", "DOWN", "NONE"]);
+    expect(sortRows([none, up, down], "periodChange", "asc").map((r) => r.symbol)).toEqual(["DOWN", "UP", "NONE"]);
+    expect(parseTableQuery({ orden: "periodChange" }).dir).toBe("desc");
   });
 });

@@ -1,21 +1,25 @@
 "use client";
 
-import { ArrowDown, ArrowUp, ArrowUpDown, BellPlus, Search } from "lucide-react";
+import { BellPlus, Search } from "lucide-react";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { CreateAlertDialog } from "@/components/alerts/create-alert-dialog";
 import { HelpTip } from "@/components/help/help-tip";
 import { ChangePill } from "@/components/market/change";
+import { RangePicker } from "@/components/market/range-picker";
+import { Sparkline } from "@/components/market/sparkline";
 import { SymbolAvatar } from "@/components/market/symbol-avatar";
+import { nextSort, SortHeader, type SortState } from "@/components/table/sort-header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { FavoriteButton } from "@/components/watchlist/favorite-button";
-import { usePanel } from "@/hooks/use-market";
+import { usePanel, useSparklineChunks } from "@/hooks/use-market";
 import { findCompany, matchScore } from "@/lib/companies";
 import { formatCompact, formatMoney, formatNumber } from "@/lib/format";
 import type { Panel } from "@/lib/market";
 import type { Quote } from "@/lib/market/types";
+import { DEFAULT_PERIOD, PERIOD_LABEL, type PeriodRange } from "@/lib/series";
 import { cn } from "@/lib/utils";
 
 const PANELS: { id: Panel; label: string }[] = [
@@ -29,53 +33,12 @@ type SortKey = "symbol" | "price" | "changePct" | "volume";
 type Currency = "ALL" | "ARS" | "USD";
 const PAGE = 50;
 
-type SortState = { key: SortKey; dir: "asc" | "desc" };
-
-function SortHeader({
-  k,
-  label,
-  align = "right",
-  help,
-  sort,
-  onSort,
-}: {
-  k: SortKey;
-  label: string;
-  align?: "left" | "right";
-  help?: string;
-  sort: SortState;
-  onSort: (k: SortKey) => void;
-}) {
-  const active = sort.key === k;
-  const Icon = !active ? ArrowUpDown : sort.dir === "asc" ? ArrowUp : ArrowDown;
-  return (
-    <th
-      className={cn("px-4 py-2.5 font-medium", align === "right" && "text-right")}
-      aria-sort={active ? (sort.dir === "asc" ? "ascending" : "descending") : "none"}
-    >
-      <span className="inline-flex items-center gap-1">
-        <button
-          type="button"
-          onClick={() => onSort(k)}
-          className={cn(
-            "inline-flex cursor-pointer items-center gap-1 rounded transition-colors hover:text-foreground",
-            active && "text-foreground",
-          )}
-        >
-          {label}
-          <Icon className={cn("size-3", !active && "opacity-50")} aria-hidden />
-        </button>
-        {help && <HelpTip id={help} />}
-      </span>
-    </th>
-  );
-}
-
 export function MarketsTable({ watchedKeys }: { watchedKeys: string[] }) {
   const [panel, setPanel] = useState<Panel>("acciones");
   const [filter, setFilter] = useState("");
   const [currency, setCurrency] = useState<Currency>("ALL");
-  const [sort, setSort] = useState<SortState>({ key: "volume", dir: "desc" });
+  const [sort, setSort] = useState<SortState<SortKey>>({ key: "volume", dir: "desc" });
+  const [range, setRange] = useState<PeriodRange>(DEFAULT_PERIOD);
   const [limit, setLimit] = useState(PAGE);
   const [alertFor, setAlertFor] = useState<Quote | null>(null);
   const { data, isLoading } = usePanel(panel);
@@ -101,8 +64,14 @@ export function MarketsTable({ watchedKeys }: { watchedKeys: string[] }) {
     });
   }, [data, filter, currency, sort]);
 
-  const toggleSort = (key: SortKey) =>
-    setSort((s) => (s.key === key ? { key, dir: s.dir === "asc" ? "desc" : "asc" } : { key, dir: key === "symbol" ? "asc" : "desc" }));
+  const toggleSort = (key: SortKey) => setSort((s) => nextSort(s, key, (k) => (k === "symbol" ? "asc" : "desc")));
+
+  // Sparklines solo de las filas visibles: un panel tiene cientos de instrumentos.
+  const visible = rows.slice(0, limit);
+  const { series, isLoading: sparksLoading } = useSparklineChunks(
+    visible.map((q) => `${q.market}:${q.symbol}`),
+    range,
+  );
 
   const showCurrency = panel === "cedears" || panel === "bonos";
 
@@ -148,6 +117,7 @@ export function MarketsTable({ watchedKeys }: { watchedKeys: string[] }) {
             ))}
           </div>
         )}
+        <RangePicker value={range} onChange={setRange} label="Período del gráfico" />
         <div className="relative ml-auto w-full sm:w-64">
           <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
           <Input
@@ -164,14 +134,18 @@ export function MarketsTable({ watchedKeys }: { watchedKeys: string[] }) {
       </div>
 
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[640px] text-sm">
+        <table className="w-full min-w-[820px] text-sm">
           <thead className="bg-muted/40 text-left text-xs text-muted-foreground">
             <tr>
               <SortHeader k="symbol" label="Instrumento" align="left" sort={sort} onSort={toggleSort} />
               <SortHeader k="price" label="Último" sort={sort} onSort={toggleSort} />
-              <SortHeader k="changePct" label="Variación" help="variacion" sort={sort} onSort={toggleSort} />
+              <SortHeader k="changePct" label="Día" extra={<HelpTip id="variacion" />} sort={sort} onSort={toggleSort} />
+              <th className="px-4 py-2.5 font-medium">Tendencia {PERIOD_LABEL[range]}</th>
+              <th className="px-4 py-2.5 text-right font-medium" title="Variación en el período elegido">
+                Var. {PERIOD_LABEL[range]}
+              </th>
               <th className="hidden px-4 py-2.5 text-right font-medium md:table-cell">Compra / Venta</th>
-              <SortHeader k="volume" label="Volumen" help="volumen" sort={sort} onSort={toggleSort} />
+              <SortHeader k="volume" label="Volumen" extra={<HelpTip id="volumen" />} sort={sort} onSort={toggleSort} />
               <th className="w-24 px-4 py-2.5">
                 <span className="sr-only">Acciones</span>
               </th>
@@ -181,13 +155,14 @@ export function MarketsTable({ watchedKeys }: { watchedKeys: string[] }) {
             {isLoading && rows.length === 0 &&
               Array.from({ length: 10 }).map((_, i) => (
                 <tr key={i}>
-                  <td colSpan={6} className="px-4 py-2.5">
+                  <td colSpan={8} className="px-4 py-2.5">
                     <Skeleton className="h-7 w-full" />
                   </td>
                 </tr>
               ))}
-            {rows.slice(0, limit).map((q) => {
+            {visible.map((q) => {
               const key = `${q.market}:${q.symbol}`;
+              const spark = series[key];
               return (
                 <tr key={key} className="group transition-colors hover:bg-muted/40">
                   <td className="px-4 py-2">
@@ -205,6 +180,16 @@ export function MarketsTable({ watchedKeys }: { watchedKeys: string[] }) {
                   <td className="num px-4 py-2 text-right font-medium">{formatMoney(q.price, q.currency)}</td>
                   <td className="px-4 py-2 text-right">
                     <ChangePill pct={q.changePct} />
+                  </td>
+                  <td className="px-4 py-2">
+                    {spark || sparksLoading ? (
+                      <Sparkline values={spark?.points ?? []} width={88} height={26} />
+                    ) : (
+                      <span className="text-muted-foreground">—</span>
+                    )}
+                  </td>
+                  <td className="px-4 py-2 text-right">
+                    {spark ? <ChangePill pct={spark.changePct} /> : <span className="text-muted-foreground">—</span>}
                   </td>
                   <td className="num hidden px-4 py-2 text-right text-muted-foreground md:table-cell">
                     {q.bid || q.ask ? `${formatNumber(q.bid)} / ${formatNumber(q.ask)}` : "—"}
@@ -229,7 +214,7 @@ export function MarketsTable({ watchedKeys }: { watchedKeys: string[] }) {
             })}
             {!isLoading && rows.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-4 py-10 text-center text-sm text-muted-foreground">
+                <td colSpan={8} className="px-4 py-10 text-center text-sm text-muted-foreground">
                   {data?.error ? "No pudimos traer este panel. Reintentamos en unos segundos." : `Nada coincide con “${filter}”.`}
                 </td>
               </tr>

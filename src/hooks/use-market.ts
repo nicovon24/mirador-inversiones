@@ -1,6 +1,6 @@
 "use client";
 
-import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQueries, useQuery } from "@tanstack/react-query";
 import type { Candle, Quote, Range, SearchResult } from "@/lib/market/types";
 import type { MarketCard, Panel } from "@/lib/market";
 
@@ -67,4 +67,45 @@ export function useSearch(query: string) {
     staleTime: 5 * 60_000,
     placeholderData: keepPreviousData,
   });
+}
+
+export interface SparkSeriesView {
+  points: number[];
+  changePct: number | null;
+}
+
+/** Sparklines de varias filas en un solo pedido. Los históricos cambian poco: se reusan 5 minutos. */
+export function useSparklines(keys: string[], range: string) {
+  const sorted = [...new Set(keys)].sort();
+  return useQuery({
+    queryKey: ["sparklines", range, sorted],
+    queryFn: () =>
+      getJson<{ series: Record<string, SparkSeriesView> }>(
+        `/api/sparklines?range=${range}&keys=${encodeURIComponent(sorted.join(","))}`,
+      ),
+    enabled: sorted.length > 0,
+    staleTime: 5 * 60_000,
+    placeholderData: keepPreviousData,
+  });
+}
+
+/**
+ * Igual que useSparklines pero para listas largas: parte las claves en tramos de 50 (una request por tramo,
+ * en el orden en que se muestran) y junta los resultados. "Mostrar más" solo pide el tramo nuevo.
+ */
+export function useSparklineChunks(keys: string[], range: string, chunk = 50) {
+  const chunks: string[][] = [];
+  for (let i = 0; i < keys.length; i += chunk) chunks.push([...new Set(keys.slice(i, i + chunk))].sort());
+  const results = useQueries({
+    queries: chunks.map((c) => ({
+      queryKey: ["sparklines", range, c],
+      queryFn: () =>
+        getJson<{ series: Record<string, SparkSeriesView> }>(`/api/sparklines?range=${range}&keys=${encodeURIComponent(c.join(","))}`),
+      staleTime: 5 * 60_000,
+      placeholderData: keepPreviousData,
+    })),
+  });
+  const series: Record<string, SparkSeriesView> = {};
+  for (const r of results) Object.assign(series, r.data?.series);
+  return { series, isLoading: results.some((r) => r.isLoading) };
 }

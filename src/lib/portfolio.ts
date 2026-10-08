@@ -83,3 +83,54 @@ export function summarize(rows: SummaryRow[], mep: number | null): PortfolioSumm
     dayPnlArs: day.toDecimalPlaces(2).toNumber(),
   };
 }
+
+// ---------- Orden de la tabla de tenencias ----------
+
+export type HoldingSortKey = "symbol" | "quantity" | "lastPrice" | "dayChangePct" | "value" | "pnl";
+
+export interface SortableHolding {
+  symbol: string;
+  currency: "ARS" | "USD";
+  quantity: number;
+  lastPrice: number | null;
+  dayChangePct: number | null;
+  value: number;
+  pnl: number | null;
+}
+
+/** Dirección con la que arranca cada columna: el ticker A→Z, los números de mayor a menor. */
+export const holdingNaturalDir = (k: HoldingSortKey): "asc" | "desc" => (k === "symbol" ? "asc" : "desc");
+
+/**
+ * Ordena tenencias por columna. Los montos (último, valuación, resultado) se comparan en pesos con el MEP
+ * porque la cartera mezcla ARS y USD; sin MEP se comparan tal cual. Las filas sin dato van siempre al final.
+ */
+export function sortHoldings<T extends SortableHolding>(rows: T[], key: HoldingSortKey, dir: "asc" | "desc", mep: number | null): T[] {
+  const sign = dir === "asc" ? 1 : -1;
+  const inArs = (v: number | null, currency: "ARS" | "USD") => (v == null ? null : currency === "USD" && mep ? v * mep : v);
+  const pick = (r: T): number | null => {
+    switch (key) {
+      case "quantity":
+        return r.quantity;
+      case "lastPrice":
+        return inArs(r.lastPrice, r.currency);
+      case "dayChangePct":
+        return r.dayChangePct;
+      case "value":
+        return inArs(r.value, r.currency);
+      case "pnl":
+        return inArs(r.pnl, r.currency);
+      default:
+        return null;
+    }
+  };
+  return [...rows].sort((a, b) => {
+    if (key === "symbol") return a.symbol.localeCompare(b.symbol, "es") * sign;
+    const va = pick(a);
+    const vb = pick(b);
+    if (va === null && vb === null) return a.symbol.localeCompare(b.symbol, "es");
+    if (va === null) return 1;
+    if (vb === null) return -1;
+    return (va - vb) * sign || a.symbol.localeCompare(b.symbol, "es");
+  });
+}

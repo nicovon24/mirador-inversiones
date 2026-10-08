@@ -1,10 +1,14 @@
 import { ArrowDown, ArrowUp, ArrowUpDown, Star } from "lucide-react";
 import Link from "next/link";
 import { HelpTip } from "@/components/help/help-tip";
+import { ChangePill } from "@/components/market/change";
+import { Sparkline } from "@/components/market/sparkline";
 import { SymbolAvatar } from "@/components/market/symbol-avatar";
+import { LivePrice } from "@/components/research/live-quotes";
 import { formatDate } from "@/lib/format";
 import { formatMetric } from "@/lib/research-format";
-import { TABLE_COLUMNS, tableHref, type ResearchRow, type TableQuery } from "@/lib/research-table";
+import { PERIOD_CHANGE, TABLE_COLUMNS, tableHref, type ResearchRow, type TableQuery } from "@/lib/research-table";
+import { PERIOD_LABEL } from "@/lib/series";
 import { cn } from "@/lib/utils";
 
 function SortLink({ query, col, label, align = "right" }: { query: TableQuery; col: string; label: string; align?: "left" | "right" }) {
@@ -47,12 +51,26 @@ export function ResearchTable({
 }) {
   return (
     <div className="overflow-x-auto">
-      <table className="w-full min-w-[980px] text-sm">
+      <table className="w-full min-w-[1240px] text-sm">
         <caption className="sr-only">{caption}</caption>
         <thead className="bg-muted/40 text-left text-xs text-muted-foreground">
           <tr>
             <th scope="col" className="sticky left-0 z-10 bg-muted/40 px-4 py-2.5 font-medium backdrop-blur" aria-sort={query.orden === "name" ? (query.dir === "asc" ? "ascending" : "descending") : "none"}>
               <SortLink query={query} col="name" label="Empresa" align="left" />
+            </th>
+            {/* Precio en vivo: no se ordena porque mezcla pesos y dólares. */}
+            <th scope="col" className="px-3 py-2.5 text-right font-medium whitespace-nowrap">
+              Precio
+            </th>
+            <th scope="col" className="px-3 py-2.5 font-medium whitespace-nowrap">
+              Tendencia {PERIOD_LABEL[query.rango]}
+            </th>
+            <th
+              scope="col"
+              className="border-r px-3 py-2.5 text-right font-medium whitespace-nowrap"
+              aria-sort={query.orden === PERIOD_CHANGE ? (query.dir === "asc" ? "ascending" : "descending") : "none"}
+            >
+              <SortLink query={query} col={PERIOD_CHANGE} label={`Var. ${PERIOD_LABEL[query.rango]}`} />
             </th>
             {TABLE_COLUMNS.map((c) => (
               <th
@@ -90,6 +108,19 @@ export function ResearchTable({
                       <StatusCell row={r} />
                     </span>
                   </Link>
+                </td>
+                <td className="px-3 py-2 text-right whitespace-nowrap">
+                  <LivePrice k={r.key} />
+                </td>
+                <td className="px-3 py-2">
+                  {r.spark.length >= 2 ? (
+                    <Sparkline values={r.spark} width={88} height={26} />
+                  ) : (
+                    <span className="text-muted-foreground">—</span>
+                  )}
+                </td>
+                <td className={cn("border-r px-3 py-2 text-right", query.orden === PERIOD_CHANGE && "font-medium")}>
+                  {r.periodChangePct !== null ? <ChangePill pct={r.periodChangePct} /> : <span className="text-muted-foreground">—</span>}
                 </td>
                 {TABLE_COLUMNS.map((c) => (
                   <td key={c.key} className={cn("num px-3 py-2 text-right", query.orden === c.key && "font-medium")}>

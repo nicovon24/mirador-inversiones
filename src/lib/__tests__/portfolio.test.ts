@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { summarize, valueHolding } from "../portfolio";
+import { sortHoldings, summarize, valueHolding } from "../portfolio";
 
 describe("valueHolding", () => {
   it("calcula valuación y resultado con decimales exactos", () => {
@@ -39,5 +39,42 @@ describe("summarize", () => {
     expect(s.dayPnlArs).toBe(10);
     expect(s.pnlArs).toBeNull();
     expect(s.totalUsd).toBeNull();
+  });
+});
+
+describe("sortHoldings", () => {
+  const h = (symbol: string, currency: "ARS" | "USD", value: number, pnl: number | null, extra: Partial<{ quantity: number; lastPrice: number | null; dayChangePct: number | null }> = {}) => ({
+    symbol,
+    currency,
+    value,
+    pnl,
+    quantity: extra.quantity ?? 1,
+    lastPrice: extra.lastPrice ?? value,
+    dayChangePct: extra.dayChangePct ?? null,
+  });
+  const rows = [h("MELI", "ARS", 1_935_780, 74_460), h("IOLDOLD", "USD", 117, 1.28), h("GGAL", "ARS", 523_740, null), h("SPY", "ARS", 1_878_300, 339_565)];
+
+  it("compara valuaciones en pesos usando el MEP", () => {
+    // 117 USD × 20.000 = 2.340.000 ARS: queda primero aunque el número sea chico.
+    expect(sortHoldings(rows, "value", "desc", 20_000).map((r) => r.symbol)).toEqual(["IOLDOLD", "MELI", "SPY", "GGAL"]);
+    expect(sortHoldings(rows, "value", "desc", 1_500).map((r) => r.symbol)).toEqual(["MELI", "SPY", "GGAL", "IOLDOLD"]);
+  });
+
+  it("deja las filas sin dato al final en ambas direcciones", () => {
+    expect(sortHoldings(rows, "pnl", "desc", 1_500).at(-1)!.symbol).toBe("GGAL");
+    expect(sortHoldings(rows, "pnl", "asc", 1_500).at(-1)!.symbol).toBe("GGAL");
+    expect(sortHoldings(rows, "pnl", "asc", 1_500)[0].symbol).toBe("IOLDOLD");
+  });
+
+  it("ordena por ticker y desempata por ticker", () => {
+    expect(sortHoldings(rows, "symbol", "asc", null).map((r) => r.symbol)).toEqual(["GGAL", "IOLDOLD", "MELI", "SPY"]);
+    const tied = [h("B", "ARS", 10, 1, { quantity: 5 }), h("A", "ARS", 10, 1, { quantity: 5 })];
+    expect(sortHoldings(tied, "quantity", "desc", null).map((r) => r.symbol)).toEqual(["A", "B"]);
+  });
+
+  it("no modifica el arreglo original", () => {
+    const copy = [...rows];
+    sortHoldings(rows, "value", "asc", 1_500);
+    expect(rows).toEqual(copy);
   });
 });

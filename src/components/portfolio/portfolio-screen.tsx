@@ -7,12 +7,13 @@ import { toast } from "sonner";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { Change, ChangePill } from "@/components/market/change";
 import { SymbolAvatar } from "@/components/market/symbol-avatar";
+import { nextSort, SortHeader, type SortState } from "@/components/table/sort-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useOverviewCards, useQuotes } from "@/hooks/use-market";
 import { formatMoney, formatNumber, formatPercent, trend } from "@/lib/format";
 import type { BrokerCash, BrokerHolding } from "@/lib/market/iol";
-import { summarize, valueHolding } from "@/lib/portfolio";
+import { holdingNaturalDir, sortHoldings, summarize, valueHolding, type HoldingSortKey } from "@/lib/portfolio";
 import { cn } from "@/lib/utils";
 import { deletePosition } from "@/server/actions";
 import type { PositionView } from "@/server/queries";
@@ -113,8 +114,12 @@ export function PortfolioScreen({
         ...valued,
       };
     });
-    return [...fromBroker, ...fromManual].sort((a, b) => b.value - a.value);
+    return [...fromBroker, ...fromManual];
   }, [broker, manual, quotes]);
+
+  const [sort, setSort] = useState<SortState<HoldingSortKey>>({ key: "value", dir: "desc" });
+  const sortedRows = useMemo(() => sortHoldings(rows, sort.key, sort.dir, mep), [rows, sort, mep]);
+  const toggleSort = (k: HoldingSortKey) => setSort((s) => nextSort(s, k, holdingNaturalDir));
 
   const cashRows = cash.map((c) => ({ value: c.total, cost: c.total, currency: c.currency }));
   const summary = summarize([...rows, ...cashRows], mep);
@@ -189,18 +194,18 @@ export function PortfolioScreen({
               <table className="w-full min-w-[820px] text-sm">
                 <thead className="border-y bg-muted/40 text-left text-xs text-muted-foreground">
                   <tr>
-                    <th className="px-4 py-2.5 font-medium">Instrumento</th>
-                    <th className="px-4 py-2.5 text-right font-medium">Cantidad</th>
+                    <SortHeader k="symbol" label="Instrumento" align="left" sort={sort} onSort={toggleSort} />
+                    <SortHeader k="quantity" label="Cantidad" sort={sort} onSort={toggleSort} />
                     <th className="px-4 py-2.5 text-right font-medium">PPC</th>
-                    <th className="px-4 py-2.5 text-right font-medium">Último</th>
-                    <th className="px-4 py-2.5 text-right font-medium">Día</th>
-                    <th className="px-4 py-2.5 text-right font-medium">Valuación</th>
-                    <th className="px-4 py-2.5 text-right font-medium">Resultado</th>
+                    <SortHeader k="lastPrice" label="Último" sort={sort} onSort={toggleSort} />
+                    <SortHeader k="dayChangePct" label="Día" sort={sort} onSort={toggleSort} />
+                    <SortHeader k="value" label="Valuación" sort={sort} onSort={toggleSort} />
+                    <SortHeader k="pnl" label="Resultado" sort={sort} onSort={toggleSort} />
                     <th className="w-10 px-2" />
                   </tr>
                 </thead>
                 <tbody className="divide-y">
-                  {rows.map((r) => (
+                  {sortedRows.map((r) => (
                     <tr key={r.id} className="transition-colors hover:bg-muted/40">
                       <td className="px-4 py-2.5">
                         <Link

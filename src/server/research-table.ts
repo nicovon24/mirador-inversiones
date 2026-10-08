@@ -14,6 +14,7 @@ import {
 import { getFundamentals, refreshOldest, type FundamentalsRow } from "@/server/fundamentals";
 import { getWatchlists } from "@/server/queries";
 import { resolveFundamentalsAsync } from "@/server/research";
+import { getSparkSeries, type SparkSeries } from "@/server/sparklines";
 
 /** Descargas máximas por vista entre favoritos y página actual. */
 const VIEW_FETCH_BUDGET = 10;
@@ -66,9 +67,11 @@ async function favoriteBases(): Promise<Base[]> {
   return out;
 }
 
-function toRow(b: Base, f: FundamentalsRow | undefined): ResearchRow {
+function toRow(b: Base, f: FundamentalsRow | undefined, s: SparkSeries | undefined): ResearchRow {
   return {
     ...b,
+    spark: s?.points ?? [],
+    periodChangePct: s?.changePct ?? null,
     // El rubro del catálogo manda; si no hay, el de Finnhub traducido.
     sector: b.sector ?? sectorEs(f?.profile?.finnhubIndustry),
     // Si el catálogo no conoce la empresa, el nombre quedó igual al ticker: se usa el del proveedor.
@@ -98,12 +101,20 @@ export async function getResearchTable(q: TableQuery): Promise<ResearchTableData
 
   // 1) Leer toda la caché sin llamar al proveedor: el universo es chico y así se puede ordenar y filtrar completo.
   const all = [...favBases, ...others];
-  const cached = await getFundamentals(
-    all.map((b) => b.fundamentalsSymbol),
-    { budget: 0 },
-  );
+  // Las series de precio van con la clave del instrumento que se opera (AR:GGAL en pesos, AR:AAPL el CEDEAR),
+  // no con el ADR. Se piden para todo el universo para poder ordenar por variación sobre todas las empresas.
+  const [cached, series] = await Promise.all([
+    getFundamentals(
+      all.map((b) => b.fundamentalsSymbol),
+      { budget: 0 },
+    ),
+    getSparkSeries(
+      all.map((b) => b.key),
+      q.rango,
+    ),
+  ]);
 
-  const allRows = others.map((b) => toRow(b, cached.get(b.fundamentalsSymbol)));
+  const allRows = others.map((b) => toRow(b, cached.get(b.fundamentalsSymbol), series[b.key]));
   const filtered = sortRows(
     allRows.filter((r) => matchesQuery(r, q)),
     q.orden,
@@ -117,11 +128,11 @@ export async function getResearchTable(q: TableQuery): Promise<ResearchTableData
   const pick = (s: string) => fresh.get(s) ?? cached.get(s);
 
   const favorites = sortRows(
-    favBases.map((b) => toRow(b, pick(b.fundamentalsSymbol))),
+    favBases.map((b) => toRow(b, pick(b.fundamentalsSymbol), series[b.key])),
     q.orden,
     q.dir,
   );
-  const rows = page.items.map((r) => toRow(r, pick(r.fundamentalsSymbol)));
+  const rows = page.items.map((r) => toRow(r, pick(r.fundamentalsSymbol), series[r.key]));
   const sectors = [...new Set(allRows.map((r) => r.sector).filter((s): s is string => Boolean(s)))].sort((a, b) =>
     a.localeCompare(b, "es"),
   );
