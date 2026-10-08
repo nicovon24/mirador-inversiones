@@ -7,11 +7,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { login, type LoginState } from "@/server/auth/actions";
 
-export function LoginForm({ next }: { next?: string }) {
+export function LoginForm() {
   const [state, action, pending] = useActionState<LoginState, FormData>(login, undefined);
   return (
     <form action={action} className="flex flex-col gap-4">
-      {next && <input type="hidden" name="next" value={next} />}
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="email">Email</Label>
         <Input id="email" name="email" type="email" autoComplete="username" required autoFocus />

@@ -2,10 +2,9 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Bell, Briefcase, CandlestickChart, GraduationCap, LayoutGrid, LogOut, Microscope, Plus, Settings, Star } from "lucide-react";
+import { Bell, Briefcase, CandlestickChart, GraduationCap, LayoutGrid, Microscope, Plus, Settings, Star } from "lucide-react";
 import { Brand } from "@/components/brand";
 import { NewWatchlistDialog } from "@/components/watchlist/new-watchlist-dialog";
-import { logout } from "@/server/auth/actions";
 import { cn } from "@/lib/utils";
 
 type NavItem = {
@@ -142,17 +141,8 @@ export function SidebarContent({ watchlists, alertCount, onNavigate }: SidebarPr
         })}
       </div>
 
-      <div className="mt-auto flex flex-col gap-0.5 border-t pt-3">
+      <div className="mt-auto border-t pt-3">
         <NavLink item={SETTINGS_NAV} alertCount={alertCount} onNavigate={onNavigate} />
-        <form action={logout}>
-          <button
-            type="submit"
-            className="flex h-9 w-full cursor-pointer items-center gap-3 rounded-lg px-2.5 text-sm text-sidebar-foreground/80 transition-colors outline-none hover:bg-sidebar-accent/60 hover:text-sidebar-foreground focus-visible:ring-3 focus-visible:ring-ring/50"
-          >
-            <LogOut className="size-[18px] shrink-0" aria-hidden />
-            Cerrar sesión
-          </button>
-        </form>
       </div>
     </div>
   );

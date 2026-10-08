@@ -5,7 +5,7 @@ import { cache } from "react";
 import { db } from "@/lib/db";
 import { randomUrlSafe, sha256Hex } from "@/lib/security/crypto";
 
-/** Nombre de la cookie de sesión. `proxy.ts` solo mira si existe; la validación real es `verifySession`. */
+/** Cookie de sesión. Solo hace falta para ver y conectar la cartera de IOL; el resto de la app es abierto. */
 export const SESSION_COOKIE = "mirador_session";
 const SESSION_TTL_MS = 30 * 24 * 3_600_000;
 
@@ -41,7 +41,7 @@ export const verifySession = cache(async (): Promise<CurrentUser | null> => {
   return { id: session.user.id, email: session.user.email, name: session.user.name };
 });
 
-/** Para páginas y Server Actions: devuelve el usuario o manda al login. */
+/** Para las acciones de IOL: devuelve el usuario o manda al login (que vuelve a Portafolio). */
 export async function requireUser(): Promise<CurrentUser> {
   const user = await verifySession();
   if (!user) redirect("/login");

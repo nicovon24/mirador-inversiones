@@ -12,7 +12,6 @@ export type LoginState = { error?: string } | undefined;
 const schema = z.object({
   email: z.string().trim().toLowerCase().email("Ingresá un email válido"),
   password: z.string().min(1, "Ingresá tu contraseña"),
-  next: z.string().optional(),
 });
 
 /** Freno a la fuerza bruta: 5 intentos seguidos por email, después uno cada 12 segundos. */
@@ -29,15 +28,13 @@ function allowAttempt(email: string): boolean {
 /** Hash de relleno para que un email inexistente tarde lo mismo que uno real. */
 let dummyHash: Promise<string> | null = null;
 
-/** Solo se vuelve a rutas internas; nada de URLs absolutas ni "//otro-sitio". */
-function safeNext(next: string | undefined): string {
-  return next && next.startsWith("/") && !next.startsWith("//") && !next.startsWith("/\\") ? next : "/";
-}
+/** El login solo sirve para ver la cartera de IOL: siempre se vuelve a Portafolio. */
+const AFTER_LOGIN = "/portfolio";
 
 export async function login(_prev: LoginState, formData: FormData): Promise<LoginState> {
   const parsed = schema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Datos inválidos" };
-  const { email, password, next } = parsed.data;
+  const { email, password } = parsed.data;
 
   if (!allowAttempt(email)) return { error: "Demasiados intentos. Esperá un minuto y probá de nuevo." };
 
@@ -47,10 +44,10 @@ export async function login(_prev: LoginState, formData: FormData): Promise<Logi
   if (!user || !ok) return { error: "Email o contraseña incorrectos." };
 
   await createSession(user.id);
-  redirect(safeNext(next));
+  redirect(AFTER_LOGIN);
 }
 
 export async function logout(): Promise<void> {
   await deleteSession();
-  redirect("/login");
+  redirect(AFTER_LOGIN);
 }

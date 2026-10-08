@@ -1,11 +1,11 @@
 import type { Metadata } from "next";
 import { PageHeader } from "@/components/page-header";
 import { AddPositionDialog } from "@/components/portfolio/add-position-dialog";
-import { IolConnectionCard, IolResultNotice } from "@/components/portfolio/iol-connection-card";
+import { IolConnectionCard, IolLoginPrompt, IolResultNotice } from "@/components/portfolio/iol-connection-card";
 import { PortfolioScreen } from "@/components/portfolio/portfolio-screen";
 import { hasIol } from "@/lib/env";
 import { getIolCash, getIolPortfolio, type BrokerCash, type BrokerHolding } from "@/lib/market/iol";
-import { requireUser } from "@/server/auth/session";
+import { verifySession } from "@/server/auth/session";
 import { iol } from "@/server/iol";
 import { IolError } from "@/server/iol/errors";
 import { getMcpPortfolio } from "@/server/iol/portfolio";
@@ -15,7 +15,8 @@ import { getPositions } from "@/server/queries";
 export const metadata: Metadata = { title: "Portafolio" };
 
 export default async function PortfolioPage({ searchParams }: { searchParams: Promise<{ iol?: string }> }) {
-  const user = await requireUser();
+  // La página es abierta: solo la cartera real de IOL necesita sesión.
+  const user = await verifySession();
   const { iol: iolResult } = await searchParams;
   const services = iol();
 
@@ -24,7 +25,7 @@ export default async function PortfolioPage({ searchParams }: { searchParams: Pr
   let brokerError: string | null = null;
   let status: IolStatus = { connected: false };
 
-  if (services) {
+  if (services && user) {
     status = await services.session.status(user.id);
     if (status.connected) {
       // Cartera en vivo vía MCP de solo lectura, con los tokens de este usuario. No se guarda nada.
@@ -61,7 +62,12 @@ export default async function PortfolioPage({ searchParams }: { searchParams: Pr
         actions={<AddPositionDialog />}
       />
       <IolResultNotice result={iolResult} />
-      {!legacy && <IolConnectionCard status={status} configured={Boolean(services)} />}
+      {!legacy &&
+        (user ? (
+          <IolConnectionCard status={status} configured={Boolean(services)} email={user.email} />
+        ) : (
+          <IolLoginPrompt />
+        ))}
       <PortfolioScreen broker={broker} brokerError={brokerError} cash={cash} manual={manual} iolConfigured={brokerConnected} />
     </div>
   );
