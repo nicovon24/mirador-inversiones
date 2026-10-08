@@ -39,6 +39,7 @@ const TYPE_LABEL: Record<string, string> = {
   ACCIONES: "Acciones",
   CEDEARS: "CEDEARs",
   TITULOSPUBLICOS: "Bonos",
+  TITPUBLICOS: "Bonos",
   OBLIGACIONESNEGOCIABLES: "Obligaciones negociables",
   LETRAS: "Letras",
   FONDOCOMUNDEINVERSION: "FCI",
@@ -46,7 +47,9 @@ const TYPE_LABEL: Record<string, string> = {
 };
 
 function typeLabel(t: string) {
-  return TYPE_LABEL[t.toUpperCase().replace(/\s/g, "")] ?? t;
+  // "TIT. PUBLICOS" y "Fondo Común de Inversión" (MCP) o "TitulosPublicos" (API v2) caen en la misma clave.
+  const key = t.normalize("NFD").replace(/\p{Diacritic}/gu, "").toUpperCase().replace(/[\s.]/g, "");
+  return TYPE_LABEL[key] ?? t;
 }
 
 export function PortfolioScreen({
@@ -137,15 +140,9 @@ export function PortfolioScreen({
   return (
     <div className="flex flex-col gap-4">
       {iolConfigured && brokerError && (
-        <div className="flex items-center gap-3 rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm">
-          <AlertTriangle className="size-4 text-destructive" aria-hidden />
-          No pudimos leer tu cuenta de InvertirOnline ({brokerError}). Revisá usuario y contraseña en las variables de entorno.
-        </div>
-      )}
-      {!iolConfigured && (
-        <div className="rounded-xl border border-primary/25 bg-accent/50 px-4 py-3 text-sm">
-          Para ver tu portafolio real de InvertirOnline, cargá <code className="font-mono text-xs">IOL_USERNAME</code> y{" "}
-          <code className="font-mono text-xs">IOL_PASSWORD</code> en el servidor. Mientras tanto podés cargar posiciones manuales.
+        <div role="alert" className="flex items-center gap-3 rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm">
+          <AlertTriangle className="size-4 shrink-0 text-destructive" aria-hidden />
+          No pudimos leer tu cuenta de InvertirOnline: {brokerError}
         </div>
       )}
 

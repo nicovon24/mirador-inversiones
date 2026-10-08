@@ -115,6 +115,74 @@ model Notification {
   @@index([read, createdAt])
 }
 
+/// Usuario de la app. Se crea con `npm run user:create`; no hay registro público.
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  /// scrypt: "scrypt$N$r$p$salt$hash" (base64url).
+  passwordHash String
+  name         String?
+  createdAt    DateTime @default(now())
+
+  sessions              Session[]
+  iolConnection         IolConnection?
+  pendingAuthorizations PendingAuthorization[]
+}
+
+/// Sesión de login. El id es SHA-256 del token de la cookie: un volcado de la base no permite reusar sesiones.
+model Session {
+  id        String   @id
+  userId    String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+/// Cliente OAuth registrado dinámicamente en IOL (POST /register), uno por URL de callback.
+model OAuthClient {
+  id          String   @id @default(cuid())
+  callbackUri String   @unique
+  clientId    String
+  createdAt   DateTime @default(now())
+}
+
+/// Autorización OAuth en curso: vive 10 minutos y se consume una sola vez en el callback.
+model PendingAuthorization {
+  id                String   @id @default(cuid())
+  /// SHA-256 (hex) del state: el state en claro solo viaja en la URL y en la cookie del flujo.
+  stateHash         String   @unique
+  userId            String
+  clientId          String
+  /// code_verifier PKCE cifrado con AES-256-GCM.
+  encryptedVerifier String
+  returnTo          String
+  expiresAt         DateTime
+  createdAt         DateTime @default(now())
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([expiresAt])
+}
+
+/// Conexión de un usuario con su cuenta de IOL. Los tokens están cifrados y nunca salen del servidor.
+model IolConnection {
+  id                    String    @id @default(cuid())
+  userId                String    @unique
+  clientId              String
+  encryptedAccessToken  String
+  encryptedRefreshToken String
+  accessTokenExpiresAt  DateTime
+  authorizedAt          DateTime
+  /// authorizedAt + 30 días: el refresh no lo extiende.
+  absoluteExpiresAt     DateTime
+  /// Lock de renovación entre instancias: quien lo toma renueva, el resto espera el token nuevo.
+  refreshLockUntil      DateTime?
+  updatedAt             DateTime  @updatedAt
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
 /// Caché persistente de datos fundamentales por ticker del proveedor (AAPL, YPF, GGAL…).
 /// Un CEDEAR y su acción en EE.UU., o una acción argentina y su ADR, comparten fila.
 model Fundamentals {

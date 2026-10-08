@@ -3,11 +3,14 @@ import { Sidebar } from "@/components/shell/sidebar";
 import { StatusFooter, type SourceStatus } from "@/components/shell/status-footer";
 import { Topbar } from "@/components/shell/topbar";
 import { hasDatabase, hasFinnhub, hasIol } from "@/lib/env";
+import { requireUser } from "@/server/auth/session";
 import { getActiveAlertCount, getNotifications, getWatchlists } from "@/server/queries";
 
 export default async function AppLayout({ children }: LayoutProps<"/">) {
   // Todo el espacio lee datos vivos (base y proveedores): nunca se prerenderiza.
   await connection();
+  // Verificación real de la sesión (proxy.ts solo mira que exista la cookie).
+  await requireUser();
   const [watchlists, alertCount, notifications] = await Promise.all([
     getWatchlists(),
     getActiveAlertCount(),

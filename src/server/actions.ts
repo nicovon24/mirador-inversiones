@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { getQuote, parseKey } from "@/lib/market";
+import { requireUser } from "./auth/session";
 import { DEFAULT_WATCHLIST } from "./queries";
 import { refreshResearchUniverse } from "./research-table";
 
@@ -19,6 +20,8 @@ const decimalString = z
   .refine((v) => /^-?\d+(\.\d+)?$/.test(v), "Número inválido");
 
 async function run<T>(fn: () => Promise<T>): Promise<ActionResult<T>> {
+  // Toda acción exige sesión. Fuera del try: el redirect al login no es un error a mostrar.
+  await requireUser();
   try {
     const data = await fn();
     revalidatePath("/", "layout");

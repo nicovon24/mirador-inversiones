@@ -12,7 +12,8 @@
     "db:up": "docker compose up -d",
     "db:migrate": "prisma migrate dev",
     "db:seed": "prisma db seed",
-    "postinstall": "prisma generate"
+    "postinstall": "prisma generate",
+    "user:create": "tsx scripts/create-user.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.8.0",
