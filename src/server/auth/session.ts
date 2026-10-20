@@ -6,8 +6,11 @@ import { randomUrlSafe, sha256Hex } from "@/lib/security/crypto";
 import { isAllowedGoogleEmail } from "./google-policy";
 import { getGoogleConfig } from "./google-oidc";
 
-export const SESSION_COOKIE = "mirador_session";
+// Old anonymous sessions used mirador_session. A distinct cookie name prevents
+// those browser tokens from being treated as Google account sessions.
+export const SESSION_COOKIE = "mirador_google_session";
 const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+let warnedMissingAuthSchema = false;
 
 export type AuthenticatedUser = {
   id: string;
@@ -35,13 +38,27 @@ export const getCurrentUser = cache(async (): Promise<AuthenticatedUser | null> 
   const token = (await cookies()).get(SESSION_COOKIE)?.value;
   if (!token || !/^[A-Za-z0-9_-]{32,128}$/.test(token)) return null;
 
-  const session = await db.session.findUnique({
-    where: { id: sha256Hex(token) },
-    select: {
-      expiresAt: true,
-      user: { select: { id: true, email: true, role: true, identityType: true, googleSub: true } },
-    },
-  });
+  let session;
+  try {
+    session = await db.session.findUnique({
+      where: { id: sha256Hex(token) },
+      select: {
+        expiresAt: true,
+        user: { select: { id: true, email: true, role: true, identityType: true, googleSub: true } },
+      },
+    });
+  } catch (error) {
+    // Keep public pages available while an additive auth migration is pending.
+    // Missing auth columns must never turn a cookie into an authenticated user.
+    if (error && typeof error === "object" && "code" in error && error.code === "P2022") {
+      if (!warnedMissingAuthSchema) {
+        console.error("Google auth schema is not migrated (P2022)");
+        warnedMissingAuthSchema = true;
+      }
+      return null;
+    }
+    throw error;
+  }
   if (!session || session.expiresAt.getTime() <= Date.now()) return null;
 
   const user = session.user;

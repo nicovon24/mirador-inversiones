@@ -18,7 +18,7 @@ vi.mock("@/lib/db", () => ({ db: {
 } }));
 vi.mock("../google-oidc", () => ({ getGoogleConfig: mocks.configured }));
 
-import { createSession, getCurrentUser } from "../session";
+import { createSession, getCurrentUser, SESSION_COOKIE } from "../session";
 import { sha256Hex } from "@/lib/security/crypto";
 
 const token = "A".repeat(43);
@@ -34,7 +34,7 @@ describe("Mirador sessions", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.configured.mockReturnValue(true);
-    mocks.cookie.mockReturnValue({ value: token });
+    mocks.cookie.mockImplementation((name: string) => name === SESSION_COOKIE ? { value: token } : undefined);
     mocks.findUnique.mockResolvedValue({ expiresAt: new Date(Date.now() + 60_000), user: validUser });
     mocks.create.mockResolvedValue({ id: "created" });
     mocks.deleteMany.mockResolvedValue({ count: 1 });
@@ -64,6 +64,28 @@ describe("Mirador sessions", () => {
     mocks.configured.mockReturnValue(false);
     expect(await getCurrentUser()).toBeNull();
     expect(mocks.findUnique).not.toHaveBeenCalled();
+  });
+
+  it("ignores the old anonymous session cookie", async () => {
+    mocks.cookie.mockImplementation((name: string) => name === "mirador_session" ? { value: token } : undefined);
+    expect(await getCurrentUser()).toBeNull();
+    expect(mocks.findUnique).not.toHaveBeenCalled();
+  });
+
+  it("keeps public pages anonymous while auth columns are missing", async () => {
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      mocks.findUnique.mockRejectedValueOnce({ code: "P2022" });
+      expect(await getCurrentUser()).toBeNull();
+      expect(log).toHaveBeenCalledWith("Google auth schema is not migrated (P2022)");
+    } finally {
+      log.mockRestore();
+    }
+  });
+
+  it("does not hide unrelated database failures", async () => {
+    mocks.findUnique.mockRejectedValueOnce(new Error("database unavailable"));
+    await expect(getCurrentUser()).rejects.toThrow("database unavailable");
   });
 
   it("accepts only an unexpired authenticated account", async () => {

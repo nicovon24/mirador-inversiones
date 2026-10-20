@@ -3,9 +3,9 @@ import { unstable_doesMiddlewareMatch } from "next/experimental/testing/server";
 import { NextRequest } from "next/server";
 import { config, proxy } from "./proxy";
 
-function request(path: string, cookie?: string) {
+function request(path: string, cookie?: string, cookieName = "mirador_google_session") {
   return new NextRequest(`https://mirador.example${path}`, {
-    headers: cookie ? { cookie: `mirador_session=${cookie}` } : undefined,
+    headers: cookie ? { cookie: `${cookieName}=${cookie}` } : undefined,
   });
 }
 
@@ -29,5 +29,9 @@ describe("navegación privada", () => {
     expect(proxy(request("/portfolio", "legacy-or-invalid")).status).toBe(200);
     expect(unstable_doesMiddlewareMatch({ config, nextConfig: {}, url: "https://mirador.example/portfolio" })).toBe(true);
     expect(unstable_doesMiddlewareMatch({ config, nextConfig: {}, url: "https://mirador.example/_next/static/app.js" })).toBe(false);
+  });
+
+  it("redirects old anonymous session cookies to login", () => {
+    expect(proxy(request("/portfolio", "old-token", "mirador_session")).status).toBe(307);
   });
 });

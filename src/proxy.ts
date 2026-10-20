@@ -6,7 +6,7 @@ const PRIVATE_PATHS = ["/research", "/portfolio", "/watchlist", "/alerts", "/set
 export function proxy(request: NextRequest) {
   const path = request.nextUrl.pathname;
   const isPrivate = PRIVATE_PATHS.some((item) => path === item || path.startsWith(`${item}/`));
-  if (!isPrivate || request.cookies.has("mirador_session")) return NextResponse.next();
+  if (!isPrivate || request.cookies.has("mirador_google_session")) return NextResponse.next();
   const login = new URL("/login", request.url);
   login.searchParams.set("next", path + request.nextUrl.search);
   return NextResponse.redirect(login);

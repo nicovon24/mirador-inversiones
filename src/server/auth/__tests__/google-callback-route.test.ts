@@ -16,14 +16,14 @@ vi.mock("@/server/auth/google-oidc", () => ({
   GOOGLE_FLOW_COOKIE: "mirador_google_flow",
 }));
 vi.mock("@/server/auth/google-user", () => ({ findOrCreateGoogleUser: mocks.user }));
-vi.mock("@/server/auth/session", () => ({ createSession: mocks.createSession, SESSION_COOKIE: "mirador_session" }));
+vi.mock("@/server/auth/session", () => ({ createSession: mocks.createSession, SESSION_COOKIE: "mirador_google_session" }));
 
 import { GET } from "@/app/api/auth/google/callback/route";
 
 const origin = "https://mirador.example.com";
 const oldToken = "A".repeat(43);
 const request = () => new NextRequest(`${origin}/api/auth/google/callback?code=one-time-code&state=flow-state`, {
-  headers: { cookie: `mirador_google_flow=signed-flow; mirador_session=${oldToken}` },
+  headers: { cookie: `mirador_google_flow=signed-flow; mirador_google_session=${oldToken}` },
 });
 
 describe("Google callback browser session switch", () => {
@@ -52,7 +52,7 @@ describe("Google callback browser session switch", () => {
 
   it("exchanges the code against the public callback URL behind Docker's internal port", async () => {
     const internalRequest = new NextRequest("http://localhost:3000/api/auth/google/callback?code=one-time-code&state=flow-state", {
-      headers: { cookie: `mirador_google_flow=signed-flow; mirador_session=${oldToken}` },
+      headers: { cookie: `mirador_google_flow=signed-flow; mirador_google_session=${oldToken}` },
     });
     mocks.config.mockReturnValue({ origin: "http://localhost:3001", clientSecret: "secret", secure: false });
 
@@ -62,6 +62,6 @@ describe("Google callback browser session switch", () => {
     expect(response.headers.get("location")).toBe("http://localhost:3001/portfolio");
     const setCookie = response.headers.get("set-cookie") ?? "";
     expect(setCookie).toContain("mirador_google_flow=");
-    expect(setCookie).toContain(`mirador_session=${"B".repeat(43)}`);
+    expect(setCookie).toContain(`mirador_google_session=${"B".repeat(43)}`);
   });
 });

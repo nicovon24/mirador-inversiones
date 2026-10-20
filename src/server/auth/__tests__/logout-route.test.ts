@@ -8,7 +8,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("@/server/auth/session", () => ({
   deleteCurrentSession: mocks.deleteSession,
-  SESSION_COOKIE: "mirador_session",
+  SESSION_COOKIE: "mirador_google_session",
 }));
 vi.mock("@/server/auth/google-oidc", () => ({ getGoogleConfig: mocks.config }));
 
@@ -36,7 +36,7 @@ describe("logout origin check", () => {
     const response = await POST(request(origin));
     expect(response.status).toBe(303);
     expect(response.headers.get("location")).toBe(`${origin}/`);
-    expect(response.headers.get("set-cookie")).toContain("mirador_session=");
+    expect(response.headers.get("set-cookie")).toContain("mirador_google_session=");
     expect(mocks.deleteSession).toHaveBeenCalledOnce();
   });
 
