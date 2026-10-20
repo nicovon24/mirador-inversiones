@@ -1,5 +1,6 @@
 import "server-only";
 import { COMPANIES, findCompany } from "@/lib/companies";
+import { db } from "@/lib/db";
 import { hasFinnhub } from "@/lib/env";
 import { parseKey } from "@/lib/market/types";
 import {
@@ -151,7 +152,17 @@ export async function getResearchTable(q: TableQuery): Promise<ResearchTableData
 
 /** Todos los tickers que la tabla puede mostrar (para el cron y el botón de actualizar). */
 export async function researchUniverseSymbols(): Promise<{ favorites: string[]; all: string[] }> {
-  const favs = (await favoriteBases()).map((b) => b.fundamentalsSymbol);
+  // El cron ya autentica su propio secreto; no tiene credenciales HTTP de la web.
+  const lists = await db.watchlist.findMany({
+    where: { ownerId: { not: null } },
+    orderBy: [{ position: "asc" }, { createdAt: "asc" }],
+    include: { items: { orderBy: [{ position: "asc" }, { createdAt: "asc" }], include: { instrument: true } } },
+  });
+  const favs: string[] = [];
+  for (const item of lists.flatMap((list) => list.items)) {
+    const target = await resolveFundamentalsAsync(item.instrument.market, item.instrument.symbol);
+    if (target) favs.push(target.symbol);
+  }
   const all = [...new Set([...favs, ...catalogUniverse().map((b) => b.fundamentalsSymbol)])];
   return { favorites: [...new Set(favs)], all };
 }

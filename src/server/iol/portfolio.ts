@@ -1,11 +1,11 @@
-import type { BrokerCash, BrokerHolding } from "@/lib/market/iol";
+import type { BrokerCash, BrokerHolding } from "@/lib/broker-types";
 import { IolError } from "./errors";
 import type { IolGateway } from "./gateway";
 import { payloadOf } from "./mcp-client";
 
 /**
  * Cartera en vivo desde el MCP de IOL. Nada se guarda ni se loguea: los montos solo viven durante el pedido.
- * IOL no informa costo de compra ni ganancia acumulada, así que esos campos quedan en null.
+ * Si IOL incluye el PPC en la respuesta, se usa para calcular el resultado acumulado.
  */
 
 const PORTFOLIO_TOOL = "get_portfolio";
@@ -31,7 +31,7 @@ export function mapCurrency(v: unknown): "ARS" | "USD" | null {
   return null;
 }
 
-export function mapHoldings(payload: unknown): BrokerHolding[] {
+export function mapHoldings(payload: unknown, market: "AR" | "US" = "AR"): BrokerHolding[] {
   const positions = ((payload as Json)?.positions ?? []) as Json[];
   const out: BrokerHolding[] = [];
   for (const p of Array.isArray(positions) ? positions : []) {
@@ -44,18 +44,26 @@ export function mapHoldings(payload: unknown): BrokerHolding[] {
     const lot = num(p.lot_price);
     const perLot = num(asset.units_per_lot) ?? 1;
     const unitPrice = num(p.unit_price) ?? (lot !== null && perLot > 0 ? lot / perLot : 0);
+    const unitAvg = num(p.average_unit_price) ?? num(p.average_price) ?? num(p.avg_price) ?? num(p.average_purchase_price) ?? num(p.purchase_price) ?? num(p.ppc);
+    const lotAvg = num(p.average_lot_price);
+    const avgPrice = unitAvg ?? (lotAvg !== null && perLot > 0 ? lotAvg / perLot : null);
+    const unitAvgPrice = avgPrice !== null && avgPrice > 0 ? avgPrice : null;
+    const value = quantity * unitPrice;
+    const cost = unitAvgPrice === null ? null : quantity * unitAvgPrice;
+    const pnl = cost === null ? null : value - cost;
     out.push({
       symbol,
+      market,
       name: typeof asset.description === "string" ? asset.description : symbol,
       type: typeof asset.type === "string" ? asset.type : "",
       currency,
       quantity,
-      avgPrice: null,
+      avgPrice: unitAvgPrice,
       lastPrice: unitPrice,
       dayChangePct: num(p.daily_change_pct),
-      pnl: null,
-      pnlPct: null,
-      value: quantity * unitPrice,
+      pnl,
+      pnlPct: cost && pnl !== null ? (pnl / cost) * 100 : null,
+      value,
     });
   }
   return out;
@@ -93,7 +101,8 @@ export async function getMcpPortfolio(gateway: IolGateway, userId: string): Prom
     const payload = payloadOf(r.result);
     if (r.call.tool === PORTFOLIO_TOOL) {
       anyPortfolio = true;
-      holdings.push(...mapHoldings(payload));
+      const country = String(r.call.arguments?.country ?? "").toLowerCase();
+      holdings.push(...mapHoldings(payload, /unidos|united|usa/.test(country) ? "US" : "AR"));
     } else if (r.call.tool === BALANCE_TOOL) {
       cash = mapBalance(payload);
     }

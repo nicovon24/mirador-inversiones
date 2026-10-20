@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { getQuote, parseKey } from "@/lib/market";
+import { getCurrentUser, type AuthenticatedUser } from "@/server/auth/session";
 import { DEFAULT_WATCHLIST } from "./queries";
 import { refreshResearchUniverse } from "./research-table";
 
@@ -18,9 +19,11 @@ const decimalString = z
   .transform((v) => (v.includes(",") ? v.replace(/\./g, "").replace(",", ".") : v))
   .refine((v) => /^-?\d+(\.\d+)?$/.test(v), "Número inválido");
 
-async function run<T>(fn: () => Promise<T>): Promise<ActionResult<T>> {
+async function run<T>(fn: (user: AuthenticatedUser) => Promise<T>): Promise<ActionResult<T>> {
+  const user = await getCurrentUser();
+  if (!user) return { ok: false, error: "Iniciá sesión para guardar tus cambios." };
   try {
-    const data = await fn();
+    const data = await fn(user);
     revalidatePath("/", "layout");
     return { ok: true, data };
   } catch (e) {
@@ -36,7 +39,7 @@ async function upsertInstrument(key: string, name?: string | null) {
   if (!parsed) throw new Error("Instrumento inválido");
   return db.instrument.upsert({
     where: { symbol_market: { symbol: parsed.symbol, market: parsed.market } },
-    update: name ? { name } : {},
+    update: {},
     create: {
       symbol: parsed.symbol,
       market: parsed.market,
@@ -46,41 +49,43 @@ async function upsertInstrument(key: string, name?: string | null) {
   });
 }
 
-async function defaultWatchlistId() {
-  const first = await db.watchlist.findFirst({ orderBy: [{ position: "asc" }, { createdAt: "asc" }] });
+async function defaultWatchlistId(ownerId: string) {
+  const first = await db.watchlist.findFirst({ where: { ownerId }, orderBy: [{ position: "asc" }, { createdAt: "asc" }] });
   if (first) return first.id;
-  return (await db.watchlist.create({ data: { name: DEFAULT_WATCHLIST } })).id;
+  return (await db.watchlist.create({ data: { name: DEFAULT_WATCHLIST, ownerId } })).id;
 }
 
 // ---------- Watchlists ----------
 
 export async function createWatchlist(name: string) {
-  return run(async () => {
+  return run(async (user) => {
     const n = z.string().trim().min(1, "Poné un nombre").max(40).parse(name);
-    const count = await db.watchlist.count();
-    const list = await db.watchlist.create({ data: { name: n, position: count } });
+    const count = await db.watchlist.count({ where: { ownerId: user.id } });
+    const list = await db.watchlist.create({ data: { name: n, position: count, ownerId: user.id } });
     return { id: list.id };
   });
 }
 
 export async function renameWatchlist(id: string, name: string) {
-  return run(async () => {
+  return run(async (user) => {
     const n = z.string().trim().min(1, "Poné un nombre").max(40).parse(name);
-    await db.watchlist.update({ where: { id }, data: { name: n } });
+    await db.watchlist.updateMany({ where: { id, ownerId: user.id }, data: { name: n } });
   });
 }
 
 export async function deleteWatchlist(id: string) {
-  return run(async () => {
-    await db.watchlist.delete({ where: { id } });
+  return run(async (user) => {
+    await db.watchlist.deleteMany({ where: { id, ownerId: user.id } });
   });
 }
 
 export async function addToWatchlist(input: { key: string; name?: string | null; watchlistId?: string }) {
-  return run(async () => {
+  return run(async (user) => {
     const key = keySchema.parse(input.key);
     const instrument = await upsertInstrument(key, input.name);
-    const watchlistId = input.watchlistId ?? (await defaultWatchlistId());
+    const watchlistId = input.watchlistId ?? (await defaultWatchlistId(user.id));
+    const owned = await db.watchlist.findFirst({ where: { id: watchlistId, ownerId: user.id }, select: { id: true } });
+    if (!owned) throw new Error("Lista no encontrada");
     const count = await db.watchlistItem.count({ where: { watchlistId } });
     await db.watchlistItem.upsert({
       where: { watchlistId_instrumentId: { watchlistId, instrumentId: instrument.id } },
@@ -91,14 +96,14 @@ export async function addToWatchlist(input: { key: string; name?: string | null;
 }
 
 export async function removeFromWatchlist(input: { key: string; watchlistId?: string }) {
-  return run(async () => {
+  return run(async (user) => {
     const parsed = parseKey(keySchema.parse(input.key))!;
     const instrument = await db.instrument.findUnique({
       where: { symbol_market: { symbol: parsed.symbol, market: parsed.market } },
     });
     if (!instrument) return;
     await db.watchlistItem.deleteMany({
-      where: { instrumentId: instrument.id, ...(input.watchlistId ? { watchlistId: input.watchlistId } : {}) },
+      where: { instrumentId: instrument.id, watchlist: { ownerId: user.id }, ...(input.watchlistId ? { watchlistId: input.watchlistId } : {}) },
     });
   });
 }
@@ -115,7 +120,7 @@ const alertSchema = z.object({
 });
 
 export async function createAlert(input: z.input<typeof alertSchema>) {
-  return run(async () => {
+  return run(async (user) => {
     const data = alertSchema.parse(input);
     if (data.condition !== "PCT_CHANGE" && new Decimal(data.target).lte(0)) {
       throw new z.ZodError([{ code: "custom", message: "El precio objetivo tiene que ser mayor a 0", path: ["target"], input: data.target }]);
@@ -129,6 +134,7 @@ export async function createAlert(input: z.input<typeof alertSchema>) {
     }
     await db.alert.create({
       data: {
+        ownerId: user.id,
         instrumentId: instrument.id,
         condition: data.condition,
         target: data.target,
@@ -141,14 +147,14 @@ export async function createAlert(input: z.input<typeof alertSchema>) {
 }
 
 export async function setAlertStatus(id: string, status: "ACTIVE" | "PAUSED") {
-  return run(async () => {
-    await db.alert.update({ where: { id }, data: { status, ...(status === "ACTIVE" ? { triggeredAt: null } : {}) } });
+  return run(async (user) => {
+    await db.alert.updateMany({ where: { id, ownerId: user.id }, data: { status, ...(status === "ACTIVE" ? { triggeredAt: null } : {}) } });
   });
 }
 
 export async function deleteAlert(id: string) {
-  return run(async () => {
-    await db.alert.delete({ where: { id } });
+  return run(async (user) => {
+    await db.alert.deleteMany({ where: { id, ownerId: user.id } });
   });
 }
 
@@ -164,11 +170,12 @@ const positionSchema = z.object({
 });
 
 export async function createPosition(input: z.input<typeof positionSchema>) {
-  return run(async () => {
+  return run(async (user) => {
     const data = positionSchema.parse(input);
     const instrument = await upsertInstrument(data.key, data.name);
     await db.position.create({
       data: {
+        ownerId: user.id,
         instrumentId: instrument.id,
         quantity: data.quantity,
         avgPrice: data.avgPrice,
@@ -180,25 +187,25 @@ export async function createPosition(input: z.input<typeof positionSchema>) {
 }
 
 export async function deletePosition(id: string) {
-  return run(async () => {
-    await db.position.delete({ where: { id } });
+  return run(async (user) => {
+    await db.position.deleteMany({ where: { id, ownerId: user.id } });
   });
 }
 
 // ---------- Notificaciones y ajustes ----------
 
 export async function markNotificationsRead() {
-  return run(async () => {
-    await db.notification.updateMany({ where: { read: false }, data: { read: true } });
+  return run(async (user) => {
+    await db.notification.updateMany({ where: { ownerId: user.id, read: false }, data: { read: true } });
   });
 }
 
 export async function unlinkTelegram() {
-  return run(async () => {
+  return run(async (user) => {
     await db.setting.upsert({
-      where: { id: "singleton" },
-      update: { telegramChatId: null },
-      create: { id: "singleton" },
+      where: { ownerId: user.id },
+      update: { telegramChatId: null, telegramLinkHash: null, telegramLinkExpiresAt: null },
+      create: { ownerId: user.id },
     });
   });
 }
@@ -206,30 +213,28 @@ export async function unlinkTelegram() {
 // ---------- Telegram ----------
 
 export async function registerTelegramWebhook() {
-  return run(async () => {
-    const { headers } = await import("next/headers");
+  return run(async (user) => {
+    if (user.role !== "OWNER") throw new Error("Acceso restringido");
     const { setWebhook } = await import("@/lib/telegram");
-    const h = await headers();
-    const host = h.get("x-forwarded-host") ?? h.get("host");
-    const proto = h.get("x-forwarded-proto") ?? "https";
-    if (!host || host.startsWith("localhost") || host.startsWith("127.")) {
+    const origin = process.env.MIRADOR_APP_URL;
+    if (!origin || !origin.startsWith("https://")) {
       throw new z.ZodError([
         {
           code: "custom",
-          message: "Telegram necesita una URL pública (deploy en Vercel o un túnel tipo ngrok).",
+          message: "Configurá MIRADOR_APP_URL con una URL HTTPS para registrar el webhook.",
           path: [],
-          input: host,
+          input: origin,
         },
       ]);
     }
-    await setWebhook(`${proto}://${host}/api/telegram/webhook`);
+    await setWebhook(`${origin.replace(/\/$/, "")}/api/telegram/webhook`);
   });
 }
 
 export async function sendTelegramTest() {
-  return run(async () => {
+  return run(async (user) => {
     const { sendMessage } = await import("@/lib/telegram");
-    const settings = await db.setting.findUnique({ where: { id: "singleton" } });
+    const settings = await db.setting.findUnique({ where: { ownerId: user.id } });
     if (!settings?.telegramChatId) {
       throw new z.ZodError([{ code: "custom", message: "Todavía no vinculaste un chat.", path: [], input: null }]);
     }

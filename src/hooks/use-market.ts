@@ -49,6 +49,14 @@ export function useOverviewCards(initial?: MarketCard[]) {
   });
 }
 
+export function useBlueRate() {
+  return useQuery({
+    queryKey: ["fx", "blue"],
+    queryFn: () => getJson<{ rate: number | null; updatedAt: string | null; error?: string }>("/api/fx/blue"),
+    refetchInterval: 60_000,
+  });
+}
+
 export function usePanel(panel: Panel) {
   return useQuery({
     queryKey: ["panel", panel],

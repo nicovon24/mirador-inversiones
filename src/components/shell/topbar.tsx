@@ -25,7 +25,7 @@ function useCrumb() {
   return [{ label: item?.label ?? "Resumen" }];
 }
 
-export function Topbar({ sidebar, notifications }: { sidebar: SidebarProps; notifications: NotificationView[] }) {
+export function Topbar({ sidebar, notifications, userEmail }: { sidebar: SidebarProps; notifications: NotificationView[]; userEmail: string | null }) {
   const crumbs = useCrumb();
   const [open, setOpen] = useState(false);
 
@@ -63,7 +63,15 @@ export function Topbar({ sidebar, notifications }: { sidebar: SidebarProps; noti
         <div className="mr-1 flex-1 md:w-80 md:flex-none">
           <CommandSearch />
         </div>
-        <Notifications items={notifications} />
+        {sidebar.privateAccess && <Notifications items={notifications} />}
+        {userEmail ? (
+          <form action="/api/auth/logout" method="post" className="ml-2 flex items-center gap-2">
+            <span className="hidden max-w-40 truncate text-xs text-muted-foreground xl:inline" title={userEmail}>{userEmail}</span>
+            <button type="submit" className="rounded-md px-2 py-1 text-xs font-medium hover:bg-muted">Salir</button>
+          </form>
+        ) : (
+          <Link href="/login" className="ml-2 rounded-md px-2 py-1 text-xs font-medium hover:bg-muted">Ingresar</Link>
+        )}
         <ThemeToggle />
       </div>
     </header>

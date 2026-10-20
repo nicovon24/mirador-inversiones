@@ -32,6 +32,9 @@ export function memoryStore() {
     async deleteExpiredPending(now) {
       for (const [k, v] of pending) if (v.expiresAt < now) pending.delete(k);
     },
+    async deletePendingForUser(userId) {
+      for (const [k, v] of pending) if (v.userId === userId) pending.delete(k);
+    },
     async getConnection(userId) {
       const c = connections.get(userId);
       return c ? { ...c } : null;

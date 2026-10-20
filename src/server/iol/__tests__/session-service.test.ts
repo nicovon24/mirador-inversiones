@@ -65,11 +65,14 @@ describe("completeAuthorization: conexión exitosa", () => {
     expect(await ctx.service.getValidAccessToken("u1")).toBe("access-1");
   });
 
-  it("acepta el callback sin sesión iniciada (lo autorizan el state y la cookie)", async () => {
+  it("rechaza el callback sin sesión Mirador antes de consumir el state", async () => {
     const ctx = setup();
     const { state } = await ctx.service.beginAuthorization("u1");
-    const out = await ctx.service.completeAuthorization({ code: "c", state, cookieState: state, sessionUserId: null });
-    expect(out.result).toBe("connected");
+    expect((await ctx.service.completeAuthorization({ code: "c", state, cookieState: state, sessionUserId: null })).result).toBe("invalid");
+    expect((await ctx.service.completeAuthorization({ code: "c", state, cookieState: state })).result).toBe("invalid");
+    expect(ctx.pending.size).toBe(1);
+    expect(ctx.oauth.exchangeCode).not.toHaveBeenCalled();
+    expect((await ctx.service.completeAuthorization({ code: "c", state, cookieState: state, sessionUserId: "u1" })).result).toBe("connected");
   });
 
   it("falla si IOL no devuelve refresh token", async () => {
@@ -83,7 +86,7 @@ describe("completeAuthorization: rechazo del consentimiento", () => {
   it("consume el state, no guarda conexión y vuelve con 'denied'", async () => {
     const ctx = setup();
     const { state } = await ctx.service.beginAuthorization("u1", "/settings");
-    const out = await ctx.service.completeAuthorization({ error: "access_denied", state, cookieState: state });
+    const out = await ctx.service.completeAuthorization({ error: "access_denied", state, cookieState: state, sessionUserId: "u1" });
     expect(out).toEqual({ result: "denied", returnTo: "/settings" });
     expect(ctx.oauth.exchangeCode).not.toHaveBeenCalled();
     expect(ctx.connections.size).toBe(0);
@@ -93,7 +96,7 @@ describe("completeAuthorization: rechazo del consentimiento", () => {
   it("si IOL rechaza el cliente registrado, lo olvida para registrarse de nuevo", async () => {
     const ctx = setup();
     const { state } = await ctx.service.beginAuthorization("u1");
-    await ctx.service.completeAuthorization({ error: "invalid_client", state, cookieState: state });
+    await ctx.service.completeAuthorization({ error: "invalid_client", state, cookieState: state, sessionUserId: "u1" });
     expect(ctx.clients.size).toBe(0);
     await ctx.service.beginAuthorization("u1");
     expect(ctx.oauth.register).toHaveBeenCalledTimes(2);
@@ -111,8 +114,8 @@ describe("completeAuthorization: state inválido, vencido o reutilizado", () => 
   it("rechaza si la cookie del flujo no coincide (otro navegador) y no consume el state", async () => {
     const ctx = setup();
     const { state } = await ctx.service.beginAuthorization("u1");
-    expect((await ctx.service.completeAuthorization({ code: "c", state, cookieState: "otro" })).result).toBe("invalid");
-    expect((await ctx.service.completeAuthorization({ code: "c", state, cookieState: null })).result).toBe("invalid");
+    expect((await ctx.service.completeAuthorization({ code: "c", state, cookieState: "otro", sessionUserId: "u1" })).result).toBe("invalid");
+    expect((await ctx.service.completeAuthorization({ code: "c", state, cookieState: null, sessionUserId: "u1" })).result).toBe("invalid");
     expect(ctx.pending.size).toBe(1);
     expect(ctx.oauth.exchangeCode).not.toHaveBeenCalled();
   });
@@ -121,7 +124,7 @@ describe("completeAuthorization: state inválido, vencido o reutilizado", () => 
     const ctx = setup();
     const { state } = await ctx.service.beginAuthorization("u1", "/settings");
     ctx.advance(10 * 60_000 + 1);
-    const out = await ctx.service.completeAuthorization({ code: "c", state, cookieState: state });
+    const out = await ctx.service.completeAuthorization({ code: "c", state, cookieState: state, sessionUserId: "u1" });
     expect(out).toEqual({ result: "expired", returnTo: "/settings" });
     expect(ctx.oauth.exchangeCode).not.toHaveBeenCalled();
     expect(ctx.connections.size).toBe(0);
@@ -130,8 +133,8 @@ describe("completeAuthorization: state inválido, vencido o reutilizado", () => 
   it("un state no sirve dos veces, aunque el primer intercambio haya fallado", async () => {
     const ctx = setup({ oauth: fakeOAuth({ exchangeCode: vi.fn(async () => Promise.reject(new IolError(400, "x"))) }) });
     const { state } = await ctx.service.beginAuthorization("u1");
-    expect((await ctx.service.completeAuthorization({ code: "c", state, cookieState: state })).result).toBe("error");
-    expect((await ctx.service.completeAuthorization({ code: "c", state, cookieState: state })).result).toBe("invalid");
+    expect((await ctx.service.completeAuthorization({ code: "c", state, cookieState: state, sessionUserId: "u1" })).result).toBe("error");
+    expect((await ctx.service.completeAuthorization({ code: "c", state, cookieState: state, sessionUserId: "u1" })).result).toBe("invalid");
     expect(ctx.oauth.exchangeCode).toHaveBeenCalledTimes(1);
   });
 
@@ -139,8 +142,8 @@ describe("completeAuthorization: state inválido, vencido o reutilizado", () => 
     const ctx = setup();
     const { state } = await ctx.service.beginAuthorization("u1");
     const results = await Promise.all([
-      ctx.service.completeAuthorization({ code: "c", state, cookieState: state }),
-      ctx.service.completeAuthorization({ code: "c", state, cookieState: state }),
+      ctx.service.completeAuthorization({ code: "c", state, cookieState: state, sessionUserId: "u1" }),
+      ctx.service.completeAuthorization({ code: "c", state, cookieState: state, sessionUserId: "u1" }),
     ]);
     expect(results.map((r) => r.result).sort()).toEqual(["connected", "invalid"]);
     expect(ctx.oauth.exchangeCode).toHaveBeenCalledTimes(1);
@@ -161,6 +164,22 @@ describe("aislamiento por usuario", () => {
     await ctx.service.disconnect("u1");
     expect((await ctx.service.status("u1")).connected).toBe(false);
     expect(await ctx.service.getValidAccessToken("u2")).toBe("access-2");
+  });
+
+  it("al desconectar elimina su flujo pendiente y conserva la conexión ajena", async () => {
+    const ctx = setup();
+    const own = await ctx.service.beginAuthorization("u1");
+    const other = await ctx.service.beginAuthorization("u2");
+    await connect(ctx, "u1");
+    await connect(ctx, "u2");
+
+    await ctx.service.disconnect("u1");
+
+    expect(ctx.pending.has(sha256Hex(own.state))).toBe(false);
+    expect(ctx.pending.has(sha256Hex(other.state))).toBe(true);
+    expect((await ctx.service.status("u1")).connected).toBe(false);
+    expect((await ctx.service.status("u2")).connected).toBe(true);
+    expect((await ctx.service.completeAuthorization({ code: "c", state: own.state, cookieState: own.state, sessionUserId: "u1" })).result).toBe("invalid");
   });
 
   it("un usuario con sesión no puede completar el flujo que inició otro", async () => {

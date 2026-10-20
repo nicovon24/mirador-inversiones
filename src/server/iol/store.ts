@@ -28,6 +28,7 @@ export interface IolStore {
   /** Borra y devuelve la autorización pendiente en una sola operación atómica; null si no existe o ya se usó. */
   consumePending(stateHash: string): Promise<PendingRow | null>;
   deleteExpiredPending(now: Date): Promise<void>;
+  deletePendingForUser(userId: string): Promise<void>;
 
   getConnection(userId: string): Promise<ConnectionRow | null>;
   /** Crea o reemplaza la conexión del usuario y libera cualquier lock de renovación. */

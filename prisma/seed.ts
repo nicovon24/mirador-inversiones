@@ -16,21 +16,14 @@ const STARTER: { symbol: string; market: Market; name: string; currency: string 
 ];
 
 async function main() {
-  if ((await db.watchlist.count()) > 0) {
-    console.log("Ya hay listas, no se siembra nada.");
-    return;
-  }
-  const list = await db.watchlist.create({ data: { name: "Mi lista" } });
-  for (const [position, s] of STARTER.entries()) {
-    const instrument = await db.instrument.upsert({
-      where: { symbol_market: { symbol: s.symbol, market: s.market } },
+  for (const instrument of STARTER) {
+    await db.instrument.upsert({
+      where: { symbol_market: { symbol: instrument.symbol, market: instrument.market } },
       update: {},
-      create: s,
+      create: instrument,
     });
-    await db.watchlistItem.create({ data: { watchlistId: list.id, instrumentId: instrument.id, position } });
   }
-  await db.setting.upsert({ where: { id: "singleton" }, update: {}, create: { id: "singleton" } });
-  console.log(`Lista "${list.name}" creada con ${STARTER.length} instrumentos.`);
+  console.log(`${STARTER.length} instrumentos públicos disponibles.`);
 }
 
 main().finally(() => db.$disconnect());

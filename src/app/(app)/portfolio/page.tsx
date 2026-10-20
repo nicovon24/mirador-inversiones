@@ -3,9 +3,8 @@ import { PageHeader } from "@/components/page-header";
 import { AddPositionDialog } from "@/components/portfolio/add-position-dialog";
 import { IolConnectionCard, IolResultNotice } from "@/components/portfolio/iol-connection-card";
 import { PortfolioScreen } from "@/components/portfolio/portfolio-screen";
-import { hasIol } from "@/lib/env";
-import { getIolCash, getIolPortfolio, type BrokerCash, type BrokerHolding } from "@/lib/market/iol";
-import { verifySession } from "@/server/auth/session";
+import type { BrokerCash, BrokerHolding } from "@/lib/broker-types";
+import { requirePrivatePage } from "@/server/private-page";
 import { iol } from "@/server/iol";
 import { IolError } from "@/server/iol/errors";
 import { getMcpPortfolio } from "@/server/iol/portfolio";
@@ -15,8 +14,7 @@ import { getPositions } from "@/server/queries";
 export const metadata: Metadata = { title: "Portafolio" };
 
 export default async function PortfolioPage({ searchParams }: { searchParams: Promise<{ iol?: string }> }) {
-  // La página es abierta. La cartera real de IOL se ve solo en el navegador que la conectó (login con IOL).
-  const user = await verifySession();
+  const user = await requirePrivatePage("/portfolio");
   const { iol: iolResult } = await searchParams;
   const services = iol();
 
@@ -25,7 +23,7 @@ export default async function PortfolioPage({ searchParams }: { searchParams: Pr
   let brokerError: string | null = null;
   let status: IolStatus = { connected: false };
 
-  if (services && user) {
+  if (services) {
     status = await services.session.status(user.id);
     if (status.connected) {
       // Cartera en vivo vía MCP de solo lectura, con los tokens de este usuario. No se guarda nada.
@@ -39,16 +37,8 @@ export default async function PortfolioPage({ searchParams }: { searchParams: Pr
     }
   }
 
-  // Integración anterior por usuario y contraseña (variables de entorno), solo si no hay conexión OAuth.
-  const legacy = !status.connected && hasIol;
-  if (legacy) {
-    const [p, c] = await Promise.allSettled([getIolPortfolio(), getIolCash()]);
-    if (p.status === "fulfilled") broker = p.value;
-    else brokerError = (p.reason as Error).message;
-    if (c.status === "fulfilled") cash = c.value;
-  }
   const manual = await getPositions();
-  const brokerConnected = status.connected || legacy;
+  const brokerConnected = status.connected;
 
   return (
     <div className="flex flex-col gap-6">
@@ -62,8 +52,8 @@ export default async function PortfolioPage({ searchParams }: { searchParams: Pr
         actions={<AddPositionDialog />}
       />
       <IolResultNotice result={iolResult} />
-      {!legacy && <IolConnectionCard status={status} configured={Boolean(services)} />}
-      <PortfolioScreen broker={broker} brokerError={brokerError} cash={cash} manual={manual} iolConfigured={brokerConnected} />
+      <IolConnectionCard status={status} configured={Boolean(services)} />
+      <PortfolioScreen broker={broker} brokerError={brokerError} cash={cash} manual={manual} iolConfigured={brokerConnected} costBasisOwner={user.id} />
     </div>
   );
 }

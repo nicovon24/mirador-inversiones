@@ -1,18 +1,14 @@
 import "server-only";
 import { findCompany, searchCompanies } from "@/lib/companies";
-import { hasFinnhub, hasIol } from "@/lib/env";
+import { hasFinnhub } from "@/lib/env";
 import { cached } from "./cache";
 import { data912Provider, getData912Panel, getData912Usa } from "./data912";
 import { finnhubQuote, finnhubSearch } from "./finnhub";
 import { impliedChangePct, impliedRate } from "./fx";
-import { getIolPanel, iolProvider } from "./iol";
 import { parseKey, type Candle, type MarketCode, type Quote, type Range, type SearchResult } from "./types";
 import { yahooHistory, yahooQuote, yahooSearch } from "./yahoo";
 
 export * from "./types";
-
-/** Proveedor de Argentina: IOL si hay credenciales, data912 como respaldo gratuito. */
-const ar = () => (hasIol ? iolProvider : data912Provider);
 
 async function firstOk<T>(...loaders: Array<() => Promise<T>>): Promise<T> {
   let lastError: unknown;
@@ -36,7 +32,7 @@ export async function getQuote(market: MarketCode, symbol: string): Promise<Quot
   const s = symbol.toUpperCase();
   // Índices (^GSPC, ^MERV…) solo los tiene Yahoo.
   if (s.startsWith("^")) return yahooQuote(s, market);
-  if (market === "AR") return firstOk(() => ar().quote(s), () => data912Provider.quote(s));
+  if (market === "AR") return data912Provider.quote(s);
   return firstOk(
     ...(hasFinnhub ? [() => finnhubQuote(s)] : []),
     () => usQuoteFromPanel(s),
@@ -99,7 +95,6 @@ export async function getHistory(market: MarketCode, symbol: string, range: Rang
     return c;
   };
   const candles = await firstOk(
-    ...(hasIol ? [() => iolProvider.history(s, range)] : []),
     () => data912Provider.history(s, range),
     yahooBa,
   );
@@ -108,7 +103,7 @@ export async function getHistory(market: MarketCode, symbol: string, range: Rang
 
 export async function searchInstruments(query: string): Promise<SearchResult[]> {
   const [arRes, usRes] = await Promise.allSettled([
-    ar().search(query),
+    data912Provider.search(query),
     hasFinnhub ? finnhubSearch(query).catch(() => yahooSearch(query)) : yahooSearch(query),
   ]);
   const q = query.trim().toUpperCase();
@@ -129,10 +124,7 @@ export type Panel = "acciones" | "cedears" | "bonos" | "usa";
 
 export function getPanel(panel: Panel): Promise<Quote[]> {
   if (panel === "usa") return getData912Usa();
-  return firstOk(
-    ...(hasIol ? [() => getIolPanel(panel)] : []),
-    () => getData912Panel(panel),
-  );
+  return getData912Panel(panel);
 }
 
 // ---------- Tarjetas del Overview ----------

@@ -45,6 +45,7 @@ export const SETTINGS_NAV: NavItem = { href: "/settings", label: "Ajustes", icon
 export const NAV: NavItem[] = [...NAV_GROUPS.flatMap((g) => g.items), SETTINGS_NAV];
 
 export interface SidebarProps {
+  privateAccess: boolean;
   watchlists: { id: string; name: string; count: number }[];
   alertCount: number;
   onNavigate?: () => void;
@@ -67,6 +68,7 @@ function NavLink({ item, alertCount, onNavigate }: { item: NavItem; alertCount: 
   return (
     <Link
       href={item.href}
+      prefetch={!["/portfolio", "/watchlist", "/alerts", "/settings"].includes(item.href)}
       onClick={onNavigate}
       aria-current={active ? "page" : undefined}
       className={cn(
@@ -88,7 +90,7 @@ function NavLink({ item, alertCount, onNavigate }: { item: NavItem; alertCount: 
 
 const GROUP_LABEL = "px-2.5 pb-2 text-[11px] font-medium tracking-[0.08em] text-muted-foreground uppercase";
 
-export function SidebarContent({ watchlists, alertCount, onNavigate }: SidebarProps) {
+export function SidebarContent({ privateAccess, watchlists, alertCount, onNavigate }: SidebarProps) {
   return (
     <div className="flex h-full flex-col gap-6 px-3 py-5">
       <Link href="/" onClick={onNavigate} className="rounded-lg px-2 focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none">
@@ -111,7 +113,7 @@ export function SidebarContent({ watchlists, alertCount, onNavigate }: SidebarPr
       <div className="flex flex-col gap-0.5 border-t pt-5">
         <div className="flex items-center justify-between px-2.5 pb-2">
           <p className="text-[11px] font-medium tracking-[0.08em] text-muted-foreground uppercase">Tus listas</p>
-          <NewWatchlistDialog
+          {privateAccess && <NewWatchlistDialog
             trigger={
               <button
                 type="button"
@@ -121,9 +123,10 @@ export function SidebarContent({ watchlists, alertCount, onNavigate }: SidebarPr
                 <Plus className="size-4" />
               </button>
             }
-          />
+          />}
         </div>
-        {watchlists.length === 0 && <p className="px-2.5 text-xs text-muted-foreground">Todavía no creaste listas.</p>}
+        {!privateAccess && <p className="px-2.5 text-xs text-muted-foreground">Ingresá a una sección privada para ver tus listas.</p>}
+        {privateAccess && watchlists.length === 0 && <p className="px-2.5 text-xs text-muted-foreground">Todavía no creaste listas.</p>}
         {watchlists.map((w) => {
           const href = `/watchlist?list=${w.id}`;
           return (

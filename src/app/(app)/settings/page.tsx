@@ -2,14 +2,16 @@ import type { Metadata } from "next";
 import { PageHeader } from "@/components/page-header";
 import { TelegramCard } from "@/components/settings/telegram-card";
 import { ThemePicker } from "@/components/settings/theme-picker";
-import { hasDatabase, hasFinnhub, hasIol } from "@/lib/env";
-import { getBotUsername, hasTelegram, linkCode } from "@/lib/telegram";
+import { hasDatabase, hasFinnhub, hasIolOAuth } from "@/lib/env";
+import { getBotUsername, hasTelegram } from "@/lib/telegram";
+import { requirePrivatePage } from "@/server/private-page";
+import { createTelegramLinkCode } from "@/server/telegram-link";
 import { getSettings } from "@/server/queries";
 
 export const metadata: Metadata = { title: "Ajustes" };
 
 const SOURCES = [
-  { name: "InvertirOnline", env: "IOL_USERNAME · IOL_PASSWORD", on: () => hasIol, what: "Argentina en tiempo real y tu portafolio" },
+  { name: "InvertirOnline", env: "IOL_SESSION_SECRET", on: () => hasIolOAuth, what: "Conexión personal desde Portafolio" },
   { name: "Finnhub", env: "FINNHUB_API_KEY", on: () => hasFinnhub, what: "EE.UU. en tiempo real y ratios" },
   { name: "data912", env: "sin clave", on: () => true, what: "Respaldo gratuito: paneles BYMA, EE.UU., MEP y CCL" },
   { name: "Yahoo Finance", env: "sin clave", on: () => true, what: "Índices y velas de EE.UU." },
@@ -17,10 +19,11 @@ const SOURCES = [
 ];
 
 export default async function SettingsPage() {
+  await requirePrivatePage("/settings");
   const settings = await getSettings();
   const configured = hasTelegram();
   const username = configured ? await getBotUsername().catch(() => null) : null;
-  const startUrl = username ? `https://t.me/${username}?start=${linkCode()}` : null;
+  const startUrl = username ? `https://t.me/${username}?start=${await createTelegramLinkCode()}` : null;
 
   return (
     <div className="flex max-w-3xl flex-col gap-6">

@@ -44,6 +44,10 @@ export const prismaIolStore: IolStore = {
     await db.pendingAuthorization.deleteMany({ where: { expiresAt: { lt: now } } });
   },
 
+  async deletePendingForUser(userId) {
+    await db.pendingAuthorization.deleteMany({ where: { userId } });
+  },
+
   async getConnection(userId): Promise<ConnectionRow | null> {
     const c = await db.iolConnection.findUnique({ where: { userId } });
     if (!c) return null;

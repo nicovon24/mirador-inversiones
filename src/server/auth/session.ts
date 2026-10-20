@@ -3,58 +3,102 @@ import { cookies } from "next/headers";
 import { cache } from "react";
 import { db } from "@/lib/db";
 import { randomUrlSafe, sha256Hex } from "@/lib/security/crypto";
+import { isAllowedGoogleEmail } from "./google-policy";
+import { getGoogleConfig } from "./google-oidc";
 
-/**
- * Identidad del navegador para la conexión con IOL. La app no tiene login propio: el login es el de IOL
- * (OAuth + PKCE). Esta cookie solo ata el navegador a su conexión, para que cada uno vea su propia cartera.
- */
 export const SESSION_COOKIE = "mirador_session";
-/** Igual que el límite absoluto de la conexión con IOL: pasado ese plazo hay que autorizar de nuevo. */
-const SESSION_TTL_MS = 30 * 24 * 3_600_000;
+const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
-export interface BrowserIdentity {
+export type AuthenticatedUser = {
   id: string;
+  email: string;
+  role: "USER" | "OWNER";
+};
+
+export class UnauthorizedError extends Error {
+  constructor() {
+    super("Iniciá sesión para continuar.");
+    this.name = "UnauthorizedError";
+  }
 }
 
-/** Identidad del navegador actual o null. Se valida contra la base en cada pedido (memoizado por render). */
-export const verifySession = cache(async (): Promise<BrowserIdentity | null> => {
+export class ForbiddenError extends Error {
+  constructor() {
+    super("No tenés acceso a esta sección.");
+    this.name = "ForbiddenError";
+  }
+}
+
+/** The cookie is only a random bearer token; all authority is loaded from the database. */
+export const getCurrentUser = cache(async (): Promise<AuthenticatedUser | null> => {
+  if (!getGoogleConfig()) return null;
   const token = (await cookies()).get(SESSION_COOKIE)?.value;
-  if (!token) return null;
-  const session = await db.session.findUnique({ where: { id: sha256Hex(token) } });
+  if (!token || !/^[A-Za-z0-9_-]{32,128}$/.test(token)) return null;
+
+  const session = await db.session.findUnique({
+    where: { id: sha256Hex(token) },
+    select: {
+      expiresAt: true,
+      user: { select: { id: true, email: true, role: true, identityType: true, googleSub: true } },
+    },
+  });
   if (!session || session.expiresAt.getTime() <= Date.now()) return null;
-  return { id: session.userId };
+
+  const user = session.user;
+  if (
+    user.identityType !== "AUTHENTICATED" ||
+    !user.googleSub ||
+    !user.email ||
+    !isAllowedGoogleEmail(user.email)
+  ) return null;
+
+  return { id: user.id, email: user.email, role: user.role };
 });
 
-/**
- * Devuelve la identidad del navegador o crea una nueva con su cookie. Solo se llama al conectar IOL,
- * así que navegar la app nunca crea filas. De paso limpia identidades abandonadas.
- */
-export async function getOrCreateIdentity(): Promise<BrowserIdentity> {
-  const existing = await verifySession();
-  if (existing) return existing;
+/** Kept as an alias while the IOL connection code migrates to Mirador users. */
+export const verifySession = getCurrentUser;
 
-  const now = new Date();
-  // Identidades sin conexión con IOL y sin sesión vigente: flujos que nunca se completaron.
-  await db.user.deleteMany({
-    where: { iolConnection: null, sessions: { none: { expiresAt: { gt: now } } }, createdAt: { lt: new Date(now.getTime() - 86_400_000) } },
-  });
-
-  const user = await db.user.create({ data: {} });
-  const token = randomUrlSafe(32);
-  const expiresAt = new Date(now.getTime() + SESSION_TTL_MS);
-  await db.session.create({ data: { id: sha256Hex(token), userId: user.id, expiresAt } });
-  (await cookies()).set(SESSION_COOKIE, token, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    path: "/",
-    expires: expiresAt,
-  });
-  return { id: user.id };
+export async function requireUser(): Promise<AuthenticatedUser> {
+  const user = await getCurrentUser();
+  if (!user) throw new UnauthorizedError();
+  return user;
 }
 
-/** Borra la identidad del navegador: en cascada se van su sesión, su conexión con IOL y los tokens. */
+export async function requireRole(role: "USER" | "OWNER"): Promise<AuthenticatedUser> {
+  const user = await requireUser();
+  if (role === "OWNER" && user.role !== "OWNER") throw new ForbiddenError();
+  return user;
+}
+
+/** Issue a new cookie token and revoke the previous browser session in one DB transaction. */
+export async function createSession(userId: string, previousToken?: string): Promise<{ token: string; expiresAt: Date }> {
+  const token = randomUrlSafe(32);
+  const expiresAt = new Date(Date.now() + SESSION_TTL_MS);
+  await db.$transaction(async (tx) => {
+    await tx.session.create({ data: { id: sha256Hex(token), userId, expiresAt } });
+    if (previousToken && /^[A-Za-z0-9_-]{32,128}$/.test(previousToken)) {
+      await tx.session.deleteMany({ where: { id: sha256Hex(previousToken) } });
+    }
+  });
+  return { token, expiresAt };
+}
+
+export async function deleteCurrentSession(): Promise<void> {
+  const token = (await cookies()).get(SESSION_COOKIE)?.value;
+  if (token && /^[A-Za-z0-9_-]{32,128}$/.test(token)) {
+    await db.session.deleteMany({ where: { id: sha256Hex(token) } });
+  }
+}
+
+/** Compatibility shim: an IOL connection must use an existing Mirador account. */
+export async function getOrCreateIdentity(): Promise<AuthenticatedUser> {
+  return requireUser();
+}
+
+/** Compatibility shim: disconnecting IOL must never delete a Mirador account. */
 export async function destroyIdentity(userId: string): Promise<void> {
-  await db.user.deleteMany({ where: { id: userId } });
+  const user = await requireUser();
+  if (user.id !== userId) throw new ForbiddenError();
+  await deleteCurrentSession();
   (await cookies()).delete(SESSION_COOKIE);
 }

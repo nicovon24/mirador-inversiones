@@ -172,6 +172,8 @@ export function createIolSessionService(deps: IolSessionDeps) {
       sessionUserId?: string | null;
     }): Promise<{ result: CallbackResult; returnTo: string }> {
       const fail = (result: CallbackResult, returnTo = DEFAULT_RETURN_TO) => ({ result, returnTo });
+      // Sin sesión Mirador válida, el state/cookie del navegador nunca autorizan conectar una cuenta.
+      if (!input.sessionUserId) return fail("invalid");
       const { state } = input;
       if (!state) return fail("invalid");
       // La cookie del flujo ata el callback al navegador que lo inició (evita CSRF de login).
@@ -180,8 +182,7 @@ export function createIolSessionService(deps: IolSessionDeps) {
       const pending = await store.consumePending(sha256Hex(state));
       if (!pending) return fail("invalid");
       if (pending.expiresAt.getTime() <= now().getTime()) return fail("expired", pending.returnTo);
-      // Si hay una sesión iniciada, tiene que ser la del usuario que empezó el flujo.
-      if (input.sessionUserId && input.sessionUserId !== pending.userId) return fail("invalid");
+      if (input.sessionUserId !== pending.userId) return fail("invalid");
 
       if (input.error) {
         if (CLIENT_REJECTION_ERRORS.has(input.error)) await store.deleteClient(config.callbackUri);
@@ -228,6 +229,7 @@ export function createIolSessionService(deps: IolSessionDeps) {
 
     /** Paso 9: borra la conexión local. Los tokens quedan inutilizables para la app. */
     async disconnect(userId: string): Promise<void> {
+      await store.deletePendingForUser(userId);
       await store.deleteConnection(userId);
     },
 

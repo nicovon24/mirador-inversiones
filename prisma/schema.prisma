@@ -34,6 +34,16 @@ enum AlertStatus {
   PAUSED
 }
 
+enum Role {
+  USER
+  OWNER
+}
+
+enum IdentityType {
+  LEGACY_ANONYMOUS
+  AUTHENTICATED
+}
+
 model Instrument {
   id        String    @id @default(cuid())
   symbol    String
@@ -52,10 +62,14 @@ model Instrument {
 
 model Watchlist {
   id        String          @id @default(cuid())
+  ownerId   String?
   name      String
   position  Int             @default(0)
   createdAt DateTime        @default(now())
   items     WatchlistItem[]
+  owner     User?           @relation(fields: [ownerId], references: [id], onDelete: SetNull)
+
+  @@index([ownerId])
 }
 
 model WatchlistItem {
@@ -73,17 +87,22 @@ model WatchlistItem {
 /// Posiciones cargadas a mano (las de IOL se leen en vivo desde la API).
 model Position {
   id           String     @id @default(cuid())
+  ownerId      String?
   instrumentId String
   quantity     Decimal    @db.Decimal(20, 8)
   avgPrice     Decimal    @db.Decimal(20, 8)
   currency     String     @default("ARS")
   openedAt     DateTime   @default(now())
   note         String?
+  owner        User?      @relation(fields: [ownerId], references: [id], onDelete: SetNull)
   instrument   Instrument @relation(fields: [instrumentId], references: [id], onDelete: Cascade)
+
+  @@index([ownerId])
 }
 
 model Alert {
   id            String         @id @default(cuid())
+  ownerId       String?
   instrumentId  String
   condition     AlertCondition
   /// Precio objetivo (ABOVE/BELOW) o porcentaje (PCT_CHANGE).
@@ -95,14 +114,17 @@ model Alert {
   note          String?
   triggeredAt   DateTime?
   createdAt     DateTime       @default(now())
+  owner         User?          @relation(fields: [ownerId], references: [id], onDelete: SetNull)
   instrument    Instrument     @relation(fields: [instrumentId], references: [id], onDelete: Cascade)
   notifications Notification[]
 
   @@index([status])
+  @@index([ownerId])
 }
 
 model Notification {
   id        String   @id @default(cuid())
+  ownerId   String?
   alertId   String?
   title     String
   body      String
@@ -110,20 +132,31 @@ model Notification {
   read      Boolean  @default(false)
   sentTo    String?
   createdAt DateTime @default(now())
+  owner     User?    @relation(fields: [ownerId], references: [id], onDelete: SetNull)
   alert     Alert?   @relation(fields: [alertId], references: [id], onDelete: SetNull)
 
   @@index([read, createdAt])
+  @@index([ownerId])
 }
 
-/// Identidad anónima de un navegador que conectó su cuenta de IOL. No tiene email ni contraseña:
-/// el login es el de IOL (OAuth + PKCE) y esta fila solo ata la cookie de sesión a la conexión.
+/// Las identidades anteriores siguen en LEGACY_ANONYMOUS y no son cuentas Mirador.
+/// El login Google crea explícitamente una identidad AUTHENTICATED.
 model User {
-  id        String   @id @default(cuid())
-  createdAt DateTime @default(now())
+  id           String       @id @default(cuid())
+  email        String?      @unique
+  googleSub    String?      @unique
+  role         Role         @default(USER)
+  identityType IdentityType @default(LEGACY_ANONYMOUS)
+  createdAt    DateTime     @default(now())
 
   sessions              Session[]
   iolConnection         IolConnection?
   pendingAuthorizations PendingAuthorization[]
+  watchlists            Watchlist[]
+  positions             Position[]
+  alerts                Alert[]
+  notifications         Notification[]
+  setting               Setting?
 }
 
 /// Sesión del navegador. El id es SHA-256 del token de la cookie: un volcado de la base no permite reusar sesiones.
@@ -197,10 +230,14 @@ model Fundamentals {
   @@index([fetchedAt])
 }
 
-/// Fila única (id = "singleton") con preferencias del usuario.
+/// La fila histórica id = "singleton" queda sin ownerId y aislada.
 model Setting {
-  id             String  @id @default("singleton")
-  theme          String  @default("system")
-  baseCurrency   String  @default("ARS")
-  telegramChatId String?
+  id                    String    @id @default(cuid())
+  ownerId               String?   @unique
+  theme                 String    @default("system")
+  baseCurrency          String    @default("ARS")
+  telegramChatId        String?
+  telegramLinkHash      String?   @unique
+  telegramLinkExpiresAt DateTime?
+  owner                 User?     @relation(fields: [ownerId], references: [id], onDelete: SetNull)
 }

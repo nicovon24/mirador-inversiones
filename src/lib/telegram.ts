@@ -1,5 +1,5 @@
 import "server-only";
-import { createHash, timingSafeEqual } from "node:crypto";
+import { timingSafeEqual } from "node:crypto";
 import { env } from "@/lib/env";
 import { cached } from "@/lib/market/cache";
 
@@ -35,17 +35,6 @@ export function setWebhook(url: string) {
     secret_token: env.TELEGRAM_WEBHOOK_SECRET,
     allowed_updates: ["message"],
   });
-}
-
-/**
- * Código para /start. Solo lo ve quien abre Ajustes, así un desconocido que
- * encuentre el bot no puede vincularse y recibir tus alertas.
- */
-export function linkCode(): string {
-  return createHash("sha256")
-    .update(`${env.TELEGRAM_WEBHOOK_SECRET ?? ""}:${env.TELEGRAM_BOT_TOKEN ?? ""}:link`)
-    .digest("hex")
-    .slice(0, 20);
 }
 
 export function safeEqual(a: string | null | undefined, b: string | null | undefined): boolean {

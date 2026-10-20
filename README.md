@@ -1,47 +1,44 @@
 # Mirador
 
-Seguimiento personal de inversiones: cotizaciones de Argentina y EE.UU., portafolio de InvertirOnline, gráficos de línea y velas, watchlists y alertas de precio por Telegram. Modo claro y oscuro.
+Seguimiento de inversiones con mercados públicos, investigación, listas, portafolio y alertas. Next.js 16, Prisma 7 y PostgreSQL.
 
-Stack: Next.js 16 (App Router, Server Actions) · Tailwind 4 · shadcn/ui (Base UI) · Prisma 7 + Postgres · React Query · lightweight-charts.
+## Acceso
 
-## Puesta en marcha
+Inicio, Mercados, instrumentos, Aprender y Glosario se pueden consultar sin ingresar. Investigación, Portafolio, Favoritos, Alertas y Ajustes requieren Google. Solo `fervon96@gmail.com` y `nicovon24@gmail.com` están autorizados, y cada cuenta ve sus propios datos. Conectar IOL desde Portafolio es opcional y se hace con OAuth para esa cuenta.
 
-```bash
-npm install
-cp .env.example .env        # completar lo que tengas (todo es opcional salvo DATABASE_URL)
-npm run db:up               # Postgres local en Docker (puerto 5440)
-npm run db:migrate
-npm run db:seed             # lista inicial con GGAL, YPFD, AAPL, NVDA…
-npm run dev
-```
+El ingreso con Google necesita `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` y `MIRADOR_APP_URL`. En Google Cloud, registrar exactamente `${MIRADOR_APP_URL}/api/auth/google/callback` como URI de redirección. Para desarrollo local usar `http://localhost:3000`; para Docker publicado en el puerto 3001 usar `http://localhost:3001`. Cada entorno requiere su URL fija y sus credenciales propias. La aplicación valida la identidad Google y la lista de correos en el servidor.
 
-## Fuentes de datos
+## Desarrollo local
 
-| Fuente | Variable | Qué aporta |
+1. Crear `.env` desde `.env.example` y configurar una base de desarrollo aislada. Comprobar la URL antes de ejecutar cualquier migración. No usar la base de producción para pruebas.
+2. `npm install`
+3. `docker compose up -d db` para PostgreSQL local.
+4. `npm run db:migrate` y `npm run db:seed` contra esa base local.
+5. `npm run dev` y abrir <http://localhost:3000>.
+
+## Docker
+
+Configurar `.env` con `MIRADOR_APP_URL="http://localhost:3001"` y el cliente Google cuyo callback sea `http://localhost:3001/api/auth/google/callback`; luego ejecutar `docker compose up --build -d` y abrir <http://localhost:3001>. Compose levanta la base local, aplica las migraciones y carga solo el catálogo público. Los datos persisten en `mirador-db`.
+
+## Fuentes y alertas
+
+| Fuente | Configuración | Uso |
 | --- | --- | --- |
-| InvertirOnline | `IOL_USERNAME`, `IOL_PASSWORD` | Argentina en tiempo real y tu portafolio |
-| Finnhub | `FINNHUB_API_KEY` | EE.UU. en tiempo real y ratios |
-| data912 | — | Respaldo gratuito: paneles BYMA, EE.UU., MEP/CCL |
-| Yahoo Finance | — | Índices (S&P, Nasdaq, Merval) y velas de EE.UU. |
-| ArgentinaDatos | — | Riesgo país |
+| data912 y Yahoo | Sin clave | Cotizaciones públicas, con posible demora |
+| Finnhub | `FINNHUB_API_KEY` | Datos de EE.UU. e investigación |
+| InvertirOnline | `IOL_SESSION_SECRET`, `IOL_MCP_CALLBACK_URI` | Conexión OAuth personal y de lectura desde Portafolio |
+| Telegram | `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET` | Alertas vinculadas a la cuenta Mirador |
 
-Sin claves la app funciona igual con las fuentes gratuitas (marcadas "puede tener demora"). Las credenciales viven solo en el servidor; el navegador consulta `/api/quotes` cada 5 s.
+El cron `/api/cron/alerts` requiere `CRON_SECRET`. El webhook de Telegram valida su propio secreto. El código de vinculación Telegram vence, se usa una vez y pertenece a quien lo generó en Ajustes.
 
-## Alertas por Telegram
+## Vercel
 
-1. Crear un bot con @BotFather y cargar `TELEGRAM_BOT_TOKEN`; definir `TELEGRAM_WEBHOOK_SECRET` (texto aleatorio largo).
-2. Con la app desplegada (URL pública), ir a **Ajustes → Registrar webhook** y luego **Vincular Telegram** (envía `/start` con un código propio).
-3. El evaluador es `GET /api/cron/alerts` con `Authorization: Bearer $CRON_SECRET`.
-   - Vercel Hobby solo permite cron diario (`vercel.json` lo deja como respaldo).
-   - Para cada minuto: crear un schedule en Upstash QStash apuntando a esa URL con el header de autorización, cron `* 13-20 * * 1-5` (horario de mercado en UTC).
+1. Verificar que el proyecto Vercel y el repositorio correspondan al dominio que se va a publicar.
+2. Configurar en **Production** `DATABASE_URL`, un `MIRADOR_APP_URL` HTTPS fijo, `GOOGLE_CLIENT_ID` y `GOOGLE_CLIENT_SECRET`. Registrar ese callback exacto en Google Cloud. Configurar `IOL_SESSION_SECRET` e `IOL_MCP_CALLBACK_URI` si se usará IOL. `DIRECT_URL` puede indicar la conexión directa para migraciones.
+3. En **Preview** y **Development**, usar una base, origen y cliente Google propios. El callback debe coincidir con un dominio estable por entorno. Si falta esa configuración, el ingreso privado queda cerrado.
+4. Hacer respaldo y revisar la migración antes de `npm run db:migrate:deploy`. Los registros privados anteriores quedan en cuarentena sin dueño; no se asignan a la primera cuenta que ingresa. La atribución requiere confirmar titularidad y un procedimiento explícito.
+5. Probar visitantes y ambas cuentas en preview, y luego comprobar el dominio productivo. No reactivar despliegues antiguos que exponían la cartera global.
 
-## Scripts
+Eliminar `IOL_USERNAME`, `IOL_PASSWORD`, `APP_ACCESS_USER` y `APP_ACCESS_PASSWORD` de Development, Preview y Production, incluidas variables específicas de ramas. Esas variables pertenecen al acceso anterior y no se usan en esta versión. La cotización pública de Argentina usa data912. La conexión IOL personal mantiene sus variables OAuth y su clave de cifrado.
 
-- `npm test` — tests unitarios (formato es-AR, MEP/CCL, alertas, valuación con Decimal).
-- `npm run build` — build de producción.
-
-## Deploy en Vercel
-
-1. Importar el repo, agregar Postgres (Neon) desde el Marketplace: crea `DATABASE_URL`.
-2. Cargar el resto de variables de `.env.example`.
-3. `npx prisma migrate deploy` contra la base de producción (o como paso de build).
+Comandos de comprobación: `npm test`, `npm run lint`, `npm run build`.

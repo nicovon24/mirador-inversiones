@@ -1,9 +1,9 @@
-import { db } from "@/lib/db";
 import { env } from "@/lib/env";
-import { linkCode, safeEqual, sendMessage } from "@/lib/telegram";
+import { safeEqual, sendMessage } from "@/lib/telegram";
+import { consumeTelegramLinkCode, unlinkTelegramChat } from "@/server/telegram-link";
 
 interface Update {
-  message?: { chat: { id: number }; text?: string };
+  message?: { chat?: { id: number; type: string }; from?: { id: number }; text?: string };
 }
 
 export async function POST(req: Request) {
@@ -14,28 +14,22 @@ export async function POST(req: Request) {
 
   const update = (await req.json()) as Update;
   const msg = update.message;
-  if (!msg?.text) return Response.json({ ok: true });
+  // Personal alerts only go to a private chat controlled by the sender.
+  if (!msg?.text || msg.chat?.type !== "private" || msg.from?.id !== msg.chat.id) return Response.json({ ok: true });
   const chatId = String(msg.chat.id);
   const [command, arg] = msg.text.trim().split(/\s+/);
 
   if (command === "/start") {
-    if (!safeEqual(arg, linkCode())) {
+    if (!await consumeTelegramLinkCode(arg, chatId)) {
       await sendMessage(chatId, "Para vincular este chat abrí Mirador → Ajustes y tocá “Vincular Telegram”.");
       return Response.json({ ok: true });
     }
-    await db.setting.upsert({
-      where: { id: "singleton" },
-      update: { telegramChatId: chatId },
-      create: { id: "singleton", telegramChatId: chatId },
-    });
     await sendMessage(chatId, "✅ Listo. Vas a recibir acá tus alertas de precio de Mirador.\nEnviá /stop para dejar de recibirlas.");
     return Response.json({ ok: true });
   }
 
   if (command === "/stop") {
-    const settings = await db.setting.findUnique({ where: { id: "singleton" } });
-    if (settings?.telegramChatId === chatId) {
-      await db.setting.update({ where: { id: "singleton" }, data: { telegramChatId: null } });
+    if (await unlinkTelegramChat(chatId)) {
       await sendMessage(chatId, "Desvinculado. No vas a recibir más alertas en este chat.");
     }
   }

@@ -10,6 +10,7 @@ import { RangePicker } from "@/components/market/range-picker";
 import { findCompany } from "@/lib/companies";
 import { hasFinnhub } from "@/lib/env";
 import { parseKey } from "@/lib/market/types";
+import { requirePrivatePage } from "@/server/private-page";
 import { parseTableQuery, tableHref, TYPE_FILTERS } from "@/lib/research-table";
 import { getResearch } from "@/server/research";
 import { getResearchTable } from "@/server/research-table";
@@ -46,6 +47,8 @@ async function Detail({ s }: { s: string }) {
 }
 
 export default async function ResearchPage({ searchParams }: { searchParams: SearchParams }) {
+  await requirePrivatePage("/research");
+  const privateAccess = true;
   const sp = await searchParams;
   const s = typeof sp.s === "string" ? sp.s : undefined;
 
@@ -71,7 +74,7 @@ export default async function ResearchPage({ searchParams }: { searchParams: Sea
         description="Compará datos fundamentales de todas las empresas a la vez: valuación, rentabilidad, crecimiento, deuda y dividendos."
         actions={
           <>
-            {hasFinnhub && <RefreshResearchButton />}
+            {hasFinnhub && privateAccess && <RefreshResearchButton />}
             <ResearchPicker label="Buscar cualquier empresa" />
           </>
         }
@@ -91,7 +94,7 @@ export default async function ResearchPage({ searchParams }: { searchParams: Sea
       </div>
 
       <LiveQuotesProvider keys={[...table.favorites, ...table.rows].map((r) => r.key)}>
-        <section className="rounded-xl border bg-card">
+        {privateAccess && <section className="rounded-xl border bg-card">
           <div className="flex flex-wrap items-baseline justify-between gap-2 p-4 pb-3">
             <h2 className="font-medium">Tus favoritos</h2>
             <p className="text-xs text-muted-foreground">Empresas de tus listas con datos disponibles</p>
@@ -103,7 +106,7 @@ export default async function ResearchPage({ searchParams }: { searchParams: Sea
               Todavía no tenés favoritos con datos fundamentales. Marcá empresas con la estrella en Mercados o en su ficha.
             </p>
           )}
-        </section>
+        </section>}
 
         <section className="rounded-xl border bg-card">
           <div className="flex flex-wrap items-center gap-3 border-b p-4">
@@ -168,7 +171,7 @@ export default async function ResearchPage({ searchParams }: { searchParams: Sea
       {table.pending > 0 && (
         <p className="text-xs text-muted-foreground">
           {table.pending} empresas todavía no tienen datos: se bajan de a poco para no pasar el límite de Finnhub. Recargá en unos
-          segundos o tocá “Actualizar datos”.
+          segundos{privateAccess ? " o tocá “Actualizar datos”" : ""}.
         </p>
       )}
       <p className="text-[11px] text-muted-foreground">

@@ -3,21 +3,18 @@
 import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { destroyIdentity, getOrCreateIdentity, verifySession } from "@/server/auth/session";
+import { requireUser } from "@/server/auth/session";
 import { IolError } from "./errors";
 import { flowCookieSecure, IOL_CALLBACK_PATH, IOL_FLOW_COOKIE, iol } from "./index";
+import { prismaIolStore } from "./prisma-store";
 import { safeReturnTo } from "./session-service";
 
-/**
- * "Ver mi portafolio de IOL": el login es el de IOL. Se identifica al navegador (o se le crea una identidad
- * anónima), se registra el flujo y se redirige a IOL para el login y el consentimiento.
- * La contraseña de IOL nunca pasa por esta app.
- */
+/** Conecta IOL a la cuenta Mirador autenticada mediante OAuth y PKCE. */
 export async function connectIol(formData: FormData): Promise<void> {
+  const user = await requireUser();
   const returnTo = safeReturnTo(String(formData.get("returnTo") ?? ""));
   const services = iol();
   if (!services) redirect(`${returnTo}?iol=not_configured`);
-  const user = await getOrCreateIdentity();
 
   let authorizeUrl: string;
   let state: string;
@@ -40,9 +37,15 @@ export async function connectIol(formData: FormData): Promise<void> {
   redirect(authorizeUrl);
 }
 
-/** Desconecta IOL: borra la conexión, los tokens y la identidad de este navegador. */
+/** Desconecta solo IOL de la cuenta Mirador autenticada. */
 export async function disconnectIol(): Promise<void> {
-  const user = await verifySession();
-  if (user) await destroyIdentity(user.id);
+  const user = await requireUser();
+  // Desconectar sigue funcionando aunque falte temporalmente la configuración OAuth.
+  const session = iol()?.session;
+  if (session) await session.disconnect(user.id);
+  else {
+    await prismaIolStore.deletePendingForUser(user.id);
+    await prismaIolStore.deleteConnection(user.id);
+  }
   revalidatePath("/portfolio");
 }

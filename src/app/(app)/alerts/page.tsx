@@ -2,10 +2,12 @@ import type { Metadata } from "next";
 import { AlertsScreen } from "@/components/alerts/alerts-screen";
 import { PageHeader } from "@/components/page-header";
 import { getAlerts, getSettings } from "@/server/queries";
+import { requirePrivatePage } from "@/server/private-page";
 
 export const metadata: Metadata = { title: "Alertas de precio" };
 
 export default async function AlertsPage() {
+  await requirePrivatePage("/alerts");
   const [alerts, settings] = await Promise.all([getAlerts(), getSettings()]);
 
   return (

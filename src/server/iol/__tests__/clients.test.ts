@@ -174,6 +174,7 @@ describe("mapeo de cartera", () => {
     expect(holdings).toHaveLength(2);
     expect(holdings[0]).toMatchObject({ symbol: "AL35", lastPrice: 1104, value: 687 * 1104, avgPrice: null, pnl: null, dayChangePct: 0.35 });
     expect(holdings[1]).toMatchObject({ symbol: "MELI", name: "MELI", currency: "ARS", value: 77 * 25140 });
+    expect(mapHoldings({ positions: [{ quantity: 2, unit_price: 10, asset: { symbol: "AAPL", currency: "USD" } }] }, "US")[0]).toMatchObject({ symbol: "AAPL", market: "US" });
   });
 
   it("suma los plazos t0..t3 por moneda", () => {
@@ -186,5 +187,16 @@ describe("mapeo de cartera", () => {
       { currency: "ARS", available: 80, total: 150 },
       { currency: "USD", available: 11, total: 15 },
     ]);
+  });
+
+  it("usa el PPC recibido y ajusta los bonos cotizados por lote", () => {
+    const holdings = mapHoldings({ positions: [
+      { quantity: 2, unit_price: 120, average_price: 100, asset: { symbol: "YPFD", currency: "ARS" } },
+      { quantity: 100, lot_price: 12500, average_lot_price: 10000, asset: { symbol: "AL35", currency: "ARS", units_per_lot: 100 } },
+      { quantity: 3, unit_price: 12, ppc: 10, asset: { symbol: "ABC", currency: "ARS" } },
+    ] });
+    expect(holdings[0]).toMatchObject({ avgPrice: 100, value: 240, pnl: 40, pnlPct: 20 });
+    expect(holdings[1]).toMatchObject({ avgPrice: 100, lastPrice: 125, value: 12500, pnl: 2500, pnlPct: 25 });
+    expect(holdings[2]).toMatchObject({ avgPrice: 10, value: 36, pnl: 6, pnlPct: 20 });
   });
 });

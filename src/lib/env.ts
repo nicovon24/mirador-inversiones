@@ -3,8 +3,6 @@ import { z } from "zod";
 
 const schema = z.object({
   DATABASE_URL: z.string().optional(),
-  IOL_USERNAME: z.string().optional(),
-  IOL_PASSWORD: z.string().optional(),
   FINNHUB_API_KEY: z.string().optional(),
   TELEGRAM_BOT_TOKEN: z.string().optional(),
   TELEGRAM_WEBHOOK_SECRET: z.string().optional(),
@@ -18,8 +16,20 @@ const schema = z.object({
 
 export const env = schema.parse(process.env);
 
-export const hasIol = Boolean(env.IOL_USERNAME && env.IOL_PASSWORD);
 export const hasFinnhub = Boolean(env.FINNHUB_API_KEY);
 export const hasDatabase = Boolean(env.DATABASE_URL);
-/** La conexión OAuth con IOL (MCP) solo se habilita con una clave de cifrado suficientemente larga. */
-export const hasIolOAuth = (env.IOL_SESSION_SECRET?.length ?? 0) >= 32;
+/** En entornos publicados el callback debe ser explícito, HTTPS y del origen de la app. */
+const iolCallback = process.env.IOL_MCP_CALLBACK_URI;
+const appOrigin = process.env.MIRADOR_APP_URL;
+const deployedCallbackValid = (() => {
+  if (!iolCallback || !appOrigin) return false;
+  try {
+    const callback = new URL(iolCallback);
+    const app = new URL(appOrigin);
+    return callback.protocol === "https:" && callback.origin === app.origin && callback.pathname === "/api/iol/callback";
+  } catch {
+    return false;
+  }
+})();
+export const hasIolOAuth = (env.IOL_SESSION_SECRET?.length ?? 0) >= 32 &&
+  (process.env.NODE_ENV === "production" ? deployedCallbackValid : true);

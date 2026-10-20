@@ -4,6 +4,7 @@ import { BellPlus, CandlestickChart, Download, LineChart, MoreHorizontal } from 
 import Link from "next/link";
 import { useState } from "react";
 import { CreateAlertDialog } from "@/components/alerts/create-alert-dialog";
+import { usePrivateAccess } from "@/components/private-access-provider";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -62,6 +63,7 @@ export function ChartPanel({
   const [range, setRange] = useState<Range>("1M");
   const [mode, setMode] = useState<ChartMode>("line");
   const [alertOpen, setAlertOpen] = useState(false);
+  const privateAccess = usePrivateAccess();
   const parsed = parseKey(instrumentKey)!;
   const { data: quoteData } = useQuotes([instrumentKey]);
   const { data: history, isLoading } = useHistory(instrumentKey, range);
@@ -163,7 +165,7 @@ export function ChartPanel({
                 <MoreHorizontal />
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-48">
-                {!isIndex && (
+                {!isIndex && privateAccess && (
                   <DropdownMenuItem onClick={() => setAlertOpen(true)}>
                     <BellPlus /> Crear alerta de precio
                   </DropdownMenuItem>

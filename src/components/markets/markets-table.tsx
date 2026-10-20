@@ -4,6 +4,7 @@ import { BellPlus, Search } from "lucide-react";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { CreateAlertDialog } from "@/components/alerts/create-alert-dialog";
+import { usePrivateAccess } from "@/components/private-access-provider";
 import { HelpTip } from "@/components/help/help-tip";
 import { ChangePill } from "@/components/market/change";
 import { RangePicker } from "@/components/market/range-picker";
@@ -41,6 +42,7 @@ export function MarketsTable({ watchedKeys }: { watchedKeys: string[] }) {
   const [range, setRange] = useState<PeriodRange>(DEFAULT_PERIOD);
   const [limit, setLimit] = useState(PAGE);
   const [alertFor, setAlertFor] = useState<Quote | null>(null);
+  const privateAccess = usePrivateAccess();
   const { data, isLoading } = usePanel(panel);
   const watched = useMemo(() => new Set(watchedKeys), [watchedKeys]);
 
@@ -205,7 +207,7 @@ export function MarketsTable({ watchedKeys }: { watchedKeys: string[] }) {
                   <td className="num px-4 py-2 text-right text-muted-foreground">{formatCompact(q.volume)}</td>
                   <td className="px-2 py-1 text-right">
                     <div className="flex justify-end gap-0.5">
-                      <Button
+                      {privateAccess && <Button
                         variant="ghost"
                         size="icon-sm"
                         aria-label={`Crear alerta para ${q.symbol}`}
@@ -213,7 +215,7 @@ export function MarketsTable({ watchedKeys }: { watchedKeys: string[] }) {
                         className="text-muted-foreground/70 hover:text-foreground"
                       >
                         <BellPlus />
-                      </Button>
+                      </Button>}
                       <FavoriteButton instrumentKey={key} name={q.name} active={watched.has(key)} />
                     </div>
                   </td>

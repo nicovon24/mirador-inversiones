@@ -4,6 +4,7 @@ import { Star } from "lucide-react";
 import { useOptimistic, useTransition } from "react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { usePrivateAccess } from "@/components/private-access-provider";
 import { addToWatchlist, removeFromWatchlist } from "@/server/actions";
 
 /** Estrella para marcar/desmarcar favorito (lista principal) desde cualquier tabla o ficha. */
@@ -19,8 +20,11 @@ export function FavoriteButton({
   className?: string;
 }) {
   const [optimistic, setOptimistic] = useOptimistic(active);
+  const privateAccess = usePrivateAccess();
   const [, start] = useTransition();
   const symbol = instrumentKey.split(":")[1];
+
+  if (!privateAccess) return null;
 
   const toggle = (e: React.MouseEvent) => {
     e.preventDefault();

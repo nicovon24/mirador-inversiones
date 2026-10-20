@@ -2,10 +2,12 @@ import type { Metadata } from "next";
 import { PageHeader } from "@/components/page-header";
 import { WatchlistScreen } from "@/components/watchlist/watchlist-view";
 import { getWatchlists } from "@/server/queries";
+import { requirePrivatePage } from "@/server/private-page";
 
 export const metadata: Metadata = { title: "Favoritos" };
 
 export default async function WatchlistPage({ searchParams }: PageProps<"/watchlist">) {
+  await requirePrivatePage("/watchlist");
   const { list } = await searchParams;
   const lists = await getWatchlists();
 

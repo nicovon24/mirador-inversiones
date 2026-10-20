@@ -1,18 +1,25 @@
 "use client";
 
-import { AlertTriangle, Trash2 } from "lucide-react";
+import { AlertTriangle, Pencil, Trash2 } from "lucide-react";
 import Link from "next/link";
-import { useMemo, useState, useTransition } from "react";
+import { useMemo, useState, useSyncExternalStore, useTransition } from "react";
 import { toast } from "sonner";
 import { ConfirmDialog } from "@/components/confirm-dialog";
-import { Change, ChangePill } from "@/components/market/change";
+import { ChangePill } from "@/components/market/change";
 import { SymbolAvatar } from "@/components/market/symbol-avatar";
+import { HoldingsPieChart, type HoldingSlice } from "@/components/portfolio/holdings-pie-chart";
+import { PortfolioResultCard } from "@/components/portfolio/portfolio-result-card";
 import { nextSort, SortHeader, type SortState } from "@/components/table/sort-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { useOverviewCards, useQuotes } from "@/hooks/use-market";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { useBlueRate, useOverviewCards, useQuotes } from "@/hooks/use-market";
 import { formatMoney, formatNumber, formatPercent, trend } from "@/lib/format";
-import type { BrokerCash, BrokerHolding } from "@/lib/market/iol";
+import type { BrokerCash, BrokerHolding } from "@/lib/broker-types";
+import { convertPortfolioAmount, type PortfolioCurrency } from "@/lib/portfolio-currency";
+import { costBasisKey, parseCostBasis, parsePurchasePrice } from "@/lib/portfolio-cost-basis";
 import { holdingNaturalDir, sortHoldings, summarize, valueHolding, type HoldingSortKey } from "@/lib/portfolio";
 import { cn } from "@/lib/utils";
 import { deletePosition } from "@/server/actions";
@@ -59,37 +66,85 @@ export function PortfolioScreen({
   cash,
   manual,
   iolConfigured,
+  costBasisOwner,
 }: {
   broker: BrokerHolding[];
   brokerError: string | null;
   cash: BrokerCash[];
   manual: PositionView[];
   iolConfigured: boolean;
+  costBasisOwner: string;
 }) {
+  const storageKey = `mirador:iol-ppc:${costBasisOwner}`;
+  const storedPrices = useSyncExternalStore(
+    (callback) => {
+      const onChange = () => callback();
+      window.addEventListener("storage", onChange);
+      window.addEventListener("mirador:ppc-change", onChange);
+      return () => {
+        window.removeEventListener("storage", onChange);
+        window.removeEventListener("mirador:ppc-change", onChange);
+      };
+    },
+    () => {
+      try { return window.localStorage.getItem(storageKey) ?? ""; } catch { return ""; }
+    },
+    () => "",
+  );
+  const customPrices = useMemo(() => parseCostBasis(storedPrices), [storedPrices]);
+  const [editing, setEditing] = useState<Row | null>(null);
+  const [purchasePrice, setPurchasePrice] = useState("");
+  const [purchaseError, setPurchaseError] = useState<string | null>(null);
+  const savePurchasePrice = (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!editing) return;
+    const price = parsePurchasePrice(purchasePrice);
+    if (price === null) return setPurchaseError("Ingresá un precio positivo, sin separador de miles.");
+    const key = costBasisKey(editing.market, editing.symbol, editing.currency);
+    try {
+      window.localStorage.setItem(storageKey, JSON.stringify({ ...customPrices, [key]: price }));
+      window.dispatchEvent(new Event("mirador:ppc-change"));
+      setEditing(null);
+      toast.success(`PPC de ${editing.symbol} guardado en este navegador`);
+    } catch {
+      setPurchaseError("No se pudo guardar en este navegador.");
+    }
+  };
   const { data: quotes } = useQuotes(manual.map((p) => p.key));
   const { data: overview } = useOverviewCards();
+  const { data: blueQuote } = useBlueRate();
   const mep = overview?.cards.find((c) => c.id === "mep")?.quote?.price ?? null;
+  const [display, setDisplay] = useState<PortfolioCurrency>("ARS");
+  const rate = display === "BLUE" ? blueQuote?.rate ?? null : mep;
+  const displayCurrency = display === "ARS" ? "ARS" : "USD";
+  const convert = (value: number | null, currency: "ARS" | "USD") => convertPortfolioAmount(value, currency, display, rate);
   const [toDelete, setToDelete] = useState<Row | null>(null);
   const [pending, start] = useTransition();
 
   const rows = useMemo<Row[]>(() => {
-    const fromBroker: Row[] = broker.map((h, i) => ({
+    const fromBroker: Row[] = broker.map((h, i) => {
+      const override = customPrices[costBasisKey(h.market ?? "AR", h.symbol, h.currency)];
+      const avgPrice = override ?? h.avgPrice;
+      const cost = override ? h.quantity * override : h.pnl != null ? h.value - h.pnl : avgPrice != null ? h.quantity * avgPrice : null;
+      const pnl = cost === null ? null : h.value - cost;
+      return ({
       id: `iol-${i}-${h.symbol}`,
       origin: "IOL",
       symbol: h.symbol,
-      market: "AR",
+      market: h.market ?? "AR",
       name: h.name,
       type: typeLabel(h.type),
       currency: h.currency,
       quantity: h.quantity,
-      avgPrice: h.avgPrice,
+      avgPrice,
       lastPrice: h.lastPrice,
       dayChangePct: h.dayChangePct,
       value: h.value,
-      cost: h.pnl != null ? h.value - h.pnl : null,
-      pnl: h.pnl,
-      pnlPct: h.pnlPct,
-    }));
+      cost,
+      pnl,
+      pnlPct: cost && pnl !== null ? (pnl / cost) * 100 : h.pnlPct,
+    });
+    });
     const fromManual: Row[] = manual.map((p) => {
       const q = quotes?.quotes[p.key];
       const price = q?.price ?? null;
@@ -115,23 +170,51 @@ export function PortfolioScreen({
       };
     });
     return [...fromBroker, ...fromManual];
-  }, [broker, manual, quotes]);
+  }, [broker, manual, quotes, customPrices]);
+
+  const duplicateKeys = useMemo(() => {
+    const imported = new Set(broker.map((h) => `${h.market ?? "AR"}:${h.symbol.toUpperCase()}`));
+    return [...new Set(manual.filter((p) => imported.has(`${p.market}:${p.symbol.toUpperCase()}`)).map((p) => p.symbol))];
+  }, [broker, manual]);
 
   const [sort, setSort] = useState<SortState<HoldingSortKey>>({ key: "value", dir: "desc" });
-  const sortedRows = useMemo(() => sortHoldings(rows, sort.key, sort.dir, mep), [rows, sort, mep]);
+  const sortedRows = useMemo(() => sortHoldings(rows, sort.key, sort.dir, rate), [rows, sort, rate]);
   const toggleSort = (k: HoldingSortKey) => setSort((s) => nextSort(s, k, holdingNaturalDir));
 
-  const cashRows = cash.map((c) => ({ value: c.total, cost: c.total, currency: c.currency }));
-  const summary = summarize([...rows, ...cashRows], mep);
+  // IOL's balance fields need reconciliation against the provider's account total.
+  // Until their settlement semantics are confirmed, show a holdings subtotal.
+  const summary = summarize(rows, rate ?? 1);
+  const resultSummary = summary;
+  const hasArs = rows.some((item) => item.currency === "ARS");
+  const hasUsd = rows.some((item) => item.currency === "USD");
+  const displayReady = display === "ARS" ? !hasUsd || Boolean(rate) : !hasArs || Boolean(rate);
+  const totalValue = displayReady ? (display === "ARS" ? summary.totalArs : summary.totalArs / (rate ?? 1)) : null;
+  const cashDisplayReady = display === "ARS" ? !cash.some((item) => item.currency === "USD") || Boolean(rate) : !cash.some((item) => item.currency === "ARS") || Boolean(rate);
+  const availableCash = cash.length && cashDisplayReady
+    ? cash.reduce((sum, item) => sum + (convert(item.available, item.currency) ?? 0), 0)
+    : null;
 
   const distribution = (() => {
-    const toArs = (r: { value: number; currency: "ARS" | "USD" }) => (r.currency === "USD" ? (mep ? r.value * mep : 0) : r.value);
+    if (!displayReady) return [];
     const map = new Map<string, number>();
-    for (const r of rows) map.set(r.type, (map.get(r.type) ?? 0) + toArs(r));
-    const cashArs = cash.reduce((s, c) => s + toArs({ value: c.total, currency: c.currency }), 0);
-    if (cashArs > 0) map.set("Efectivo", cashArs);
+    for (const r of rows) map.set(r.type, (map.get(r.type) ?? 0) + (convert(r.value, r.currency) ?? 0));
     const total = [...map.values()].reduce((a, b) => a + b, 0) || 1;
     return [...map.entries()].map(([label, v]) => ({ label, value: v, pct: (v / total) * 100 })).sort((a, b) => b.value - a.value);
+  })();
+
+  const holdingsDistribution: HoldingSlice[] = (() => {
+    if (!displayReady) return [];
+    const values = new Map<string, { label: string; value: number }>();
+    for (const row of rows) {
+      const value = convert(row.value, row.currency) ?? 0;
+      if (!Number.isFinite(value) || value <= 0) continue;
+      const key = `${row.market}:${row.symbol}`;
+      values.set(key, { label: `${row.symbol} · ${row.market}`, value: (values.get(key)?.value ?? 0) + value });
+    }
+    const total = [...values.values()].reduce((sum, item) => sum + item.value, 0);
+    return [...values.entries()]
+      .map(([key, item]) => ({ key, ...item, pct: (item.value / total) * 100 }))
+      .sort((a, b) => b.value - a.value);
   })();
 
   const stat = (label: string, value: React.ReactNode, sub?: React.ReactNode) => (
@@ -150,33 +233,61 @@ export function PortfolioScreen({
           No pudimos leer tu cuenta de InvertirOnline: {brokerError}
         </div>
       )}
+      {duplicateKeys.length > 0 && (
+        <div role="status" className="rounded-xl border border-amber-500/30 bg-amber-500/5 px-4 py-3 text-sm">
+          Hay posiciones manuales que también figuran en IOL: {duplicateKeys.join(", ")}. El subtotal incluye ambas hasta que revises las posiciones manuales.
+        </div>
+      )}
+
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-sm text-muted-foreground">Mostrar importes en</p>
+        <div className="flex flex-wrap gap-0.5 rounded-lg bg-muted p-0.5" role="group" aria-label="Moneda del portafolio">
+          {([
+            ["ARS", "Pesos"],
+            ["MEP", "Dólar MEP"],
+            ["BLUE", "Dólar blue"],
+          ] as const).map(([option, label]) => (
+            <button
+              key={option}
+              type="button"
+              aria-pressed={display === option}
+              onClick={() => setDisplay(option)}
+              className={cn(
+                "h-7 cursor-pointer rounded-md px-3 text-xs font-medium transition-colors focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none",
+                display === option ? "bg-card text-primary shadow-sm" : "text-muted-foreground hover:text-foreground",
+              )}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        {stat("Valor total", formatMoney(summary.totalArs), summary.totalUsd != null ? `≈ ${formatMoney(summary.totalUsd, "USD")} al MEP` : "Esperando dólar MEP…")}
         {stat(
-          "Resultado del día",
-          <span className={cn(trend(summary.dayPnlArs) === "up" && "text-up", trend(summary.dayPnlArs) === "down" && "text-down")}>
-            {summary.dayPnlArs > 0 ? "+" : summary.dayPnlArs < 0 ? "−" : ""}
-            {formatMoney(Math.abs(summary.dayPnlArs))}
-          </span>,
-        )}
-        {stat(
-          "Resultado total",
-          summary.pnlArs != null ? (
-            <span className={cn(trend(summary.pnlArs) === "up" && "text-up", trend(summary.pnlArs) === "down" && "text-down")}>
-              {summary.pnlArs > 0 ? "+" : summary.pnlArs < 0 ? "−" : ""}
-              {formatMoney(Math.abs(summary.pnlArs))}
-            </span>
-          ) : (
-            "—"
-          ),
-          summary.pnlPct != null ? <Change pct={summary.pnlPct} showAbs={false} /> : "Sin precio de compra",
+          "Valor de tenencias",
+          formatMoney(totalValue, displayCurrency),
+          display === "ARS"
+            ? hasUsd ? (mep ? "Tenencias en USD valuadas al MEP · efectivo no incluido" : "Esperando dólar MEP") : "Efectivo no incluido"
+            : rate ? `${display === "BLUE" ? "Blue venta" : "MEP"}: ${formatMoney(rate)} por USD · efectivo no incluido` : hasArs ? "Esperando cotización" : "Efectivo no incluido",
         )}
         {stat(
           "Efectivo disponible",
-          cash.length ? formatMoney(cash.find((c) => c.currency === "ARS")?.available ?? 0) : "—",
-          cash.find((c) => c.currency === "USD") ? `${formatMoney(cash.find((c) => c.currency === "USD")!.available, "USD")} en dólares` : iolConfigured ? undefined : "Solo con IOL",
+          formatMoney(availableCash, displayCurrency),
+          iolConfigured ? undefined : "Solo con IOL",
         )}
+        <PortfolioResultCard
+          positions={rows.map((row) => ({
+            value: row.value,
+            currency: row.currency,
+            dayChangePct: row.dayChangePct,
+            cost: row.cost,
+          }))}
+          summary={resultSummary}
+          display={display}
+          rate={rate}
+          displayReady={displayReady}
+        />
       </div>
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
@@ -196,8 +307,8 @@ export function PortfolioScreen({
                   <tr>
                     <SortHeader k="symbol" label="Instrumento" align="left" sort={sort} onSort={toggleSort} />
                     <SortHeader k="quantity" label="Cantidad" sort={sort} onSort={toggleSort} />
-                    <th className="px-4 py-2.5 text-right font-medium">PPC</th>
-                    <SortHeader k="lastPrice" label="Último" sort={sort} onSort={toggleSort} />
+                    <th className="px-4 py-2.5 text-right font-medium">PPC ({displayCurrency})</th>
+                    <SortHeader k="lastPrice" label={`Último (${displayCurrency})`} sort={sort} onSort={toggleSort} />
                     <SortHeader k="dayChangePct" label="Día" sort={sort} onSort={toggleSort} />
                     <SortHeader k="value" label="Valuación" sort={sort} onSort={toggleSort} />
                     <SortHeader k="pnl" label="Resultado" sort={sort} onSort={toggleSort} />
@@ -226,19 +337,36 @@ export function PortfolioScreen({
                       </td>
                       <td className="num px-4 py-2.5 text-right">{formatNumber(r.quantity, r.quantity % 1 ? 2 : 0)}</td>
                       <td className="num px-4 py-2.5 text-right text-muted-foreground">
-                        {r.avgPrice != null ? formatNumber(r.avgPrice) : "—"}
+                        <span className="inline-flex items-center justify-end gap-1.5">
+                          {formatNumber(convert(r.avgPrice, r.currency))}
+                          {r.origin === "IOL" && (
+                            <button
+                              type="button"
+                              className="rounded p-1 text-primary hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                              aria-label={`${r.avgPrice == null ? "Cargar" : "Editar"} precio promedio de compra de ${r.symbol}`}
+                              title={`${r.avgPrice == null ? "Cargar" : "Editar"} PPC de ${r.symbol}`}
+                              onClick={() => {
+                                setEditing(r);
+                                setPurchasePrice(r.avgPrice == null ? "" : String(r.avgPrice));
+                                setPurchaseError(null);
+                              }}
+                            >
+                              <Pencil className="size-3.5" aria-hidden />
+                            </button>
+                          )}
+                        </span>
                       </td>
-                      <td className="num px-4 py-2.5 text-right">{r.lastPrice != null ? formatNumber(r.lastPrice) : "—"}</td>
+                      <td className="num px-4 py-2.5 text-right">{formatNumber(convert(r.lastPrice, r.currency))}</td>
                       <td className="px-4 py-2.5 text-right">
                         <ChangePill pct={r.dayChangePct} />
                       </td>
-                      <td className="num px-4 py-2.5 text-right font-medium">{formatMoney(r.value, r.currency)}</td>
+                      <td className="num px-4 py-2.5 text-right font-medium">{formatMoney(convert(r.value, r.currency), displayCurrency)}</td>
                       <td className="px-4 py-2.5 text-right">
-                        {r.pnl != null ? (
+                        {r.pnl != null && convert(r.pnl, r.currency) != null ? (
                           <span className={cn("num flex flex-col items-end", trend(r.pnl) === "up" ? "text-up" : trend(r.pnl) === "down" ? "text-down" : "")}>
                             <span className="text-sm font-medium">
                               {r.pnl > 0 ? "+" : r.pnl < 0 ? "−" : ""}
-                              {formatMoney(Math.abs(r.pnl), r.currency)}
+                              {formatMoney(Math.abs(convert(r.pnl, r.currency) ?? 0), displayCurrency)}
                             </span>
                             <span className="text-xs">{formatPercent(r.pnlPct)}</span>
                           </span>
@@ -267,30 +395,38 @@ export function PortfolioScreen({
           )}
         </section>
 
-        <section className="flex flex-col gap-4 rounded-xl border bg-card p-4 xl:self-start" aria-label="Distribución">
-          <h2 className="font-medium">Distribución</h2>
-          {distribution.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Sin datos.</p>
-          ) : (
-            <>
-              <div className="flex h-2.5 overflow-hidden rounded-full bg-muted" aria-hidden>
-                {distribution.map((d, i) => (
-                  <span key={d.label} style={{ width: `${d.pct}%`, backgroundColor: `var(--chart-${(i % 5) + 1})` }} />
-                ))}
-              </div>
-              <ul className="flex flex-col gap-2.5">
-                {distribution.map((d, i) => (
-                  <li key={d.label} className="flex items-center gap-2.5 text-sm">
-                    <span className="size-2.5 rounded-sm" style={{ backgroundColor: `var(--chart-${(i % 5) + 1})` }} aria-hidden />
-                    <span className="flex-1">{d.label}</span>
-                    <span className="num text-muted-foreground">{formatMoney(d.value, "ARS", 0)}</span>
-                    <span className="num w-14 text-right font-medium">{formatNumber(d.pct, 1)} %</span>
-                  </li>
-                ))}
-              </ul>
-            </>
-          )}
-        </section>
+        <div className="flex flex-col gap-4 xl:self-start">
+          <section className="flex flex-col gap-4 rounded-xl border bg-card p-4" aria-label="Distribución">
+            <h2 className="font-medium">Distribución</h2>
+            {distribution.length === 0 ? (
+              <p className="text-sm text-muted-foreground">{displayReady ? "Sin datos." : "Esperando cotización."}</p>
+            ) : (
+              <>
+                <div className="flex h-2.5 overflow-hidden rounded-full bg-muted" aria-hidden>
+                  {distribution.map((d, i) => (
+                    <span key={d.label} style={{ width: `${d.pct}%`, backgroundColor: `var(--chart-${(i % 5) + 1})` }} />
+                  ))}
+                </div>
+                <ul className="flex flex-col gap-2.5">
+                  {distribution.map((d, i) => (
+                    <li key={d.label} className="flex items-center gap-2.5 text-sm">
+                      <span className="size-2.5 rounded-sm" style={{ backgroundColor: `var(--chart-${(i % 5) + 1})` }} aria-hidden />
+                      <span className="flex-1">{d.label}</span>
+                    <span className="num text-muted-foreground">{formatMoney(d.value, displayCurrency, 0)}</span>
+                      <span className="num w-14 text-right font-medium">{formatNumber(d.pct, 1)} %</span>
+                    </li>
+                  ))}
+                </ul>
+              </>
+            )}
+          </section>
+          <section className="flex flex-col gap-4 rounded-xl border bg-card p-4" aria-label="Distribución por instrumento">
+            <h2 className="font-medium">Distribución de tenencias</h2>
+            {displayReady ? <HoldingsPieChart slices={holdingsDistribution} currency={displayCurrency} /> : (
+              <p className="text-sm text-muted-foreground">Esperando cotización.</p>
+            )}
+          </section>
+        </div>
       </div>
 
       <ConfirmDialog
@@ -310,6 +446,33 @@ export function PortfolioScreen({
           })
         }
       />
+      <Dialog open={Boolean(editing)} onOpenChange={(open) => { if (!open) setEditing(null); }}>
+        <DialogContent className="sm:max-w-md">
+          <form onSubmit={savePurchasePrice} className="grid gap-5">
+            <DialogHeader>
+              <DialogTitle>Precio promedio de compra · {editing?.symbol}</DialogTitle>
+              <DialogDescription>
+                Ingresá el PPC por unidad en {editing?.currency === "USD" ? "dólares" : "pesos"}, como figura en IOL. Para bonos, usá el precio por nominal.
+                Se guarda solo en este navegador.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-2">
+              <Label htmlFor="iol-purchase-price">PPC ({editing?.currency})</Label>
+              <Input
+                id="iol-purchase-price"
+                autoFocus
+                inputMode="decimal"
+                value={purchasePrice}
+                onChange={(event) => { setPurchasePrice(event.target.value); setPurchaseError(null); }}
+                placeholder="Ej. 1250,50"
+                required
+              />
+              {purchaseError && <p className="text-sm text-destructive" role="alert">{purchaseError}</p>}
+            </div>
+            <DialogFooter><Button type="submit">Guardar PPC</Button></DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
