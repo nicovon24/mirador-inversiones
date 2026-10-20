@@ -8,19 +8,20 @@ export const dynamic = "force-dynamic";
 export default async function LoginPage({
   searchParams,
 }: {
-  searchParams: Promise<{ next?: string; error?: string }>;
+  searchParams: Promise<{ next?: string | string[]; error?: string | string[] }>;
 }) {
   const params = await searchParams;
-  const next = safeReturnTo(params.next ?? null);
+  const next = safeReturnTo(params.next);
   if (await getCurrentUser()) redirect(next);
 
   const configured = Boolean(getGoogleConfig());
   const loginUrl = `/api/auth/google/start?next=${encodeURIComponent(next)}`;
-  const message = params.error === "not_allowed"
+  const error = typeof params.error === "string" ? params.error : undefined;
+  const message = error === "not_allowed"
     ? "Esta cuenta de Google no tiene acceso a las secciones privadas."
-    : params.error === "account_conflict"
+    : error === "account_conflict"
       ? "No se pudo vincular esta cuenta. Contactá al administrador."
-      : params.error
+      : error
         ? "No se pudo completar el acceso. Intentá nuevamente."
         : null;
 

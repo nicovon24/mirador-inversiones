@@ -36,6 +36,8 @@ services:
     env_file: .env
     environment:
       DATABASE_URL: postgresql://mirador:mirador@db:5432/mirador
+      MIRADOR_APP_URL: http://localhost:3001
+      MIRADOR_LOCAL_AUTH: "true"
     ports:
       - "127.0.0.1:3001:3000"
     depends_on:

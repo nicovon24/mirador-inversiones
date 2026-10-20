@@ -29,6 +29,35 @@ describe("Google login flow", () => {
     expect(safeReturnTo("/\\evil.example/")).toBe("/research");
   });
 
+  it("rejects ASCII controls and malformed values before constructing a redirect URL", () => {
+    const unsafe: unknown[] = [
+      "/\t/evil.example",
+      "/\n/evil.example",
+      "/\r/evil.example",
+      "/\v/evil.example",
+      "/\f/evil.example",
+      "/\x1f/evil.example",
+      "/\x7f/evil.example",
+      ["/portfolio", "//evil.example"],
+      ["/portfolio"],
+      { path: "/portfolio" },
+      123,
+      null,
+      undefined,
+    ];
+    const parseReturnTo = safeReturnTo as (value: unknown) => string;
+    for (const input of unsafe) {
+      const returnTo = parseReturnTo(input);
+      expect(returnTo).toBe("/research");
+      expect(new URL(returnTo, "https://mirador.example.com").origin).toBe("https://mirador.example.com");
+    }
+  });
+
+  it("rejects a signed flow whose return destination contains a tab", () => {
+    const encoded = encodeGoogleFlow({ ...flow(), returnTo: "/\t/evil.example" }, secret);
+    expect(decodeGoogleFlow(encoded, secret)).toBeNull();
+  });
+
   it("fails closed without a complete fixed callback configuration", () => {
     vi.stubEnv("GOOGLE_CLIENT_ID", "test-client-id");
     vi.stubEnv("GOOGLE_CLIENT_SECRET", "test-client-secret");

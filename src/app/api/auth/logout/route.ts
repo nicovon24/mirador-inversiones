@@ -6,7 +6,9 @@ export const runtime = "nodejs";
 
 export async function POST(request: NextRequest) {
   const config = getGoogleConfig();
-  if (!config || request.nextUrl.origin !== config.origin || request.headers.get("origin") !== config.origin) {
+  // The browser's Origin is the CSRF boundary. Behind Docker or a TLS proxy,
+  // NextRequest.nextUrl.origin may be the server's internal address.
+  if (!config || request.headers.get("origin") !== config.origin || request.nextUrl.pathname !== "/api/auth/logout") {
     return new Response("Forbidden", { status: 403, headers: { "Cache-Control": "no-store" } });
   }
   await deleteCurrentSession();

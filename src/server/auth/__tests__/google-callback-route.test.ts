@@ -49,4 +49,19 @@ describe("Google callback browser session switch", () => {
     expect(response.headers.get("location")).toContain("/login?error=not_allowed");
     expect(mocks.createSession).not.toHaveBeenCalled();
   });
+
+  it("exchanges the code against the public callback URL behind Docker's internal port", async () => {
+    const internalRequest = new NextRequest("http://localhost:3000/api/auth/google/callback?code=one-time-code&state=flow-state", {
+      headers: { cookie: `mirador_google_flow=signed-flow; mirador_session=${oldToken}` },
+    });
+    mocks.config.mockReturnValue({ origin: "http://localhost:3001", clientSecret: "secret", secure: false });
+
+    const response = await GET(internalRequest);
+    const exchangedUrl = mocks.exchange.mock.calls[0]?.[0] as URL;
+    expect(exchangedUrl.href).toBe("http://localhost:3001/api/auth/google/callback?code=one-time-code&state=flow-state");
+    expect(response.headers.get("location")).toBe("http://localhost:3001/portfolio");
+    const setCookie = response.headers.get("set-cookie") ?? "";
+    expect(setCookie).toContain("mirador_google_flow=");
+    expect(setCookie).toContain(`mirador_session=${"B".repeat(43)}`);
+  });
 });

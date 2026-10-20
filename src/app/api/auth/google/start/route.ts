@@ -8,7 +8,11 @@ export async function GET(request: NextRequest) {
   if (!config) return new Response("Google login unavailable", { status: 503, headers: { "Cache-Control": "no-store" } });
 
   const returnTo = safeReturnTo(request.nextUrl.searchParams.get("next"));
-  if (request.nextUrl.origin !== config.origin) {
+  const forwardedHost = request.headers.get("x-forwarded-host")?.split(",")[0].trim();
+  const host = forwardedHost || request.headers.get("host");
+  const forwardedProtocol = request.headers.get("x-forwarded-proto")?.split(",")[0].trim();
+  const protocol = forwardedProtocol || request.nextUrl.protocol.replace(":", "");
+  if (!host || `${protocol}://${host}` !== config.origin) {
     const canonical = new URL("/api/auth/google/start", config.origin);
     canonical.searchParams.set("next", returnTo);
     return NextResponse.redirect(canonical);

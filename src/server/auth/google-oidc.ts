@@ -31,8 +31,11 @@ export function getGoogleConfig(): GoogleConfig | null {
   try {
     const url = new URL(appUrl);
     const local = url.hostname === "localhost" || url.hostname === "127.0.0.1";
+    const allowLocalHttp = local && url.protocol === "http:" && !process.env.VERCEL && (
+      process.env.NODE_ENV !== "production" || process.env.MIRADOR_LOCAL_AUTH === "true"
+    );
     if (
-      (url.protocol !== "https:" && !(process.env.NODE_ENV !== "production" && local && url.protocol === "http:")) ||
+      (url.protocol !== "https:" && !allowLocalHttp) ||
       url.username || url.password || url.pathname !== "/" || url.search || url.hash
     ) return null;
 
@@ -48,11 +51,23 @@ export function getGoogleConfig(): GoogleConfig | null {
   }
 }
 
-export function safeReturnTo(value: string | null): string {
-  if (!value || !value.startsWith("/") || value.startsWith("//") || value.includes("\\") || /[\r\n\0]/.test(value)) {
+export function safeReturnTo(value: unknown): string {
+  if (
+    typeof value !== "string" ||
+    !value.startsWith("/") ||
+    value.startsWith("//") ||
+    value.includes("\\") ||
+    /[\x00-\x1f\x7f]/.test(value)
+  ) {
     return "/research";
   }
-  return value;
+  try {
+    // URL parsing can turn malformed slash/control combinations into a host.
+    if (new URL(value, "https://mirador.invalid").origin !== "https://mirador.invalid") return "/research";
+    return value;
+  } catch {
+    return "/research";
+  }
 }
 
 function sign(payload: string, secret: string): string {

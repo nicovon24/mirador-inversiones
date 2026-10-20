@@ -18,7 +18,7 @@ El ingreso con Google necesita `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` y `MIR
 
 ## Docker
 
-Configurar `.env` con `MIRADOR_APP_URL="http://localhost:3001"` y el cliente Google cuyo callback sea `http://localhost:3001/api/auth/google/callback`; luego ejecutar `docker compose up --build -d` y abrir <http://localhost:3001>. Compose levanta la base local, aplica las migraciones y carga solo el catálogo público. Los datos persisten en `mirador-db`.
+Configurar `GOOGLE_CLIENT_ID` y `GOOGLE_CLIENT_SECRET` en `.env`, y registrar `http://localhost:3001/api/auth/google/callback` en el cliente web de Google. Luego ejecutar `docker compose up --build -d` y abrir <http://localhost:3001>. Compose fija `MIRADOR_APP_URL=http://localhost:3001` y habilita HTTP solo para este entorno local. También levanta la base local, aplica las migraciones y carga solo el catálogo público. Los datos persisten en `mirador-db`.
 
 ## Fuentes y alertas
 
@@ -34,10 +34,10 @@ El cron `/api/cron/alerts` requiere `CRON_SECRET`. El webhook de Telegram valida
 ## Vercel
 
 1. Verificar que el proyecto Vercel y el repositorio correspondan al dominio que se va a publicar.
-2. Configurar en **Production** `DATABASE_URL`, un `MIRADOR_APP_URL` HTTPS fijo, `GOOGLE_CLIENT_ID` y `GOOGLE_CLIENT_SECRET`. Registrar ese callback exacto en Google Cloud. Configurar `IOL_SESSION_SECRET` e `IOL_MCP_CALLBACK_URI` si se usará IOL. `DIRECT_URL` puede indicar la conexión directa para migraciones.
+2. Configurar en **Production** `DATABASE_URL`, `MIRADOR_APP_URL=https://mirador-inversiones.vercel.app`, `GOOGLE_CLIENT_ID` y `GOOGLE_CLIENT_SECRET`. Registrar `https://mirador-inversiones.vercel.app/api/auth/google/callback` en un cliente web de Google para producción. Configurar `IOL_SESSION_SECRET` e `IOL_MCP_CALLBACK_URI` si se usará IOL. `DIRECT_URL` puede indicar la conexión directa para migraciones. No configurar `MIRADOR_LOCAL_AUTH` en Vercel.
 3. En **Preview** y **Development**, usar una base, origen y cliente Google propios. El callback debe coincidir con un dominio estable por entorno. Si falta esa configuración, el ingreso privado queda cerrado.
 4. Hacer respaldo y revisar la migración antes de `npm run db:migrate:deploy`. Los registros privados anteriores quedan en cuarentena sin dueño; no se asignan a la primera cuenta que ingresa. La atribución requiere confirmar titularidad y un procedimiento explícito.
-5. Probar visitantes y ambas cuentas en preview, y luego comprobar el dominio productivo. No reactivar despliegues antiguos que exponían la cartera global.
+5. Probar el recorrido completo en el dominio productivo: visitante en páginas públicas y redirección a `/login` en páginas privadas; ingreso con cada uno de los dos correos autorizados; rechazo de un tercero; portafolios separados; cierre de sesión que revoca la cookie y vuelve a Inicio. Verificar la conexión IOL solo en la cuenta que la autorizó. No reactivar despliegues antiguos que exponían la cartera global.
 
 Eliminar `IOL_USERNAME`, `IOL_PASSWORD`, `APP_ACCESS_USER` y `APP_ACCESS_PASSWORD` de Development, Preview y Production, incluidas variables específicas de ramas. Esas variables pertenecen al acceso anterior y no se usan en esta versión. La cotización pública de Argentina usa data912. La conexión IOL personal mantiene sus variables OAuth y su clave de cifrado.
 

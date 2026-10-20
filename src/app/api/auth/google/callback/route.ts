@@ -22,21 +22,35 @@ export async function GET(request: NextRequest) {
   const config = getGoogleConfig();
   if (!config) return new Response("Google login unavailable", { status: 503, headers: { "Cache-Control": "no-store" } });
 
-  const callbackUrl = new URL(request.url);
-  if (callbackUrl.origin !== config.origin || callbackUrl.pathname !== "/api/auth/google/callback") {
+  if (request.nextUrl.pathname !== "/api/auth/google/callback") {
     return loginRedirect(config.origin, "invalid_flow");
   }
+  // Use the configured public origin. In Docker and behind TLS-terminating proxies,
+  // request.url may contain the internal host/port instead of the browser's origin.
+  const callbackUrl = new URL(`${request.nextUrl.pathname}${request.nextUrl.search}`, config.origin);
 
   const flow = decodeGoogleFlow(request.cookies.get(GOOGLE_FLOW_COOKIE)?.value, config.clientSecret);
-  if (!flow || !callbackUrl.searchParams.has("code") || !callbackUrl.searchParams.has("state")) {
+  if (!flow) {
+    console.warn("Google login: flow cookie missing or invalid");
+    return loginRedirect(config.origin, "invalid_flow");
+  }
+  if (!callbackUrl.searchParams.has("code") || !callbackUrl.searchParams.has("state")) {
+    console.warn("Google login: callback parameters missing");
     return loginRedirect(config.origin, "invalid_flow");
   }
 
+  let claims: Awaited<ReturnType<typeof exchangeGoogleCode>>;
   try {
-    const claims = await exchangeGoogleCode(callbackUrl, flow);
-    const identity = claims && validateGoogleIdentity(claims);
-    if (!identity) return loginRedirect(config.origin, "not_allowed");
+    claims = await exchangeGoogleCode(callbackUrl, flow);
+  } catch (error) {
+    // Never log the callback URL, authorization code, cookie, or token.
+    console.error("Google login: code exchange failed", error instanceof Error ? error.name : "unknown error");
+    return loginRedirect(config.origin, "invalid_flow");
+  }
+  const identity = claims && validateGoogleIdentity(claims);
+  if (!identity) return loginRedirect(config.origin, "not_allowed");
 
+  try {
     const user = await findOrCreateGoogleUser(identity);
     if (!user) return loginRedirect(config.origin, "account_conflict");
 
@@ -56,7 +70,8 @@ export async function GET(request: NextRequest) {
       expires: expiresAt,
     });
     return response;
-  } catch {
-    return loginRedirect(config.origin, "invalid_flow");
+  } catch (error) {
+    console.error("Google login: account or session persistence failed", error instanceof Error ? error.name : "unknown error");
+    return loginRedirect(config.origin, "server_error");
   }
 }
