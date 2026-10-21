@@ -1,165 +1,165 @@
-# App de análisis de inversiones — resumen del video y requerimientos
+# Investment Analysis App — Video Summary and Requirements
 
 Oct 6, 2026 · @Nico
 
-El video muestra Vantage, un dashboard web para seguir el mercado, armar listas de favoritos, llevar una cartera cargada a mano y crear alertas de precio. Corre como demo, con cotizaciones simuladas de acciones de EE.UU. Para tu app sirve casi toda la estructura: lo que falta es el universo argentino (CEDEARs, acciones, bonos, dólar MEP/CCL), datos en tiempo real y una ayuda que explique cada dato en lenguaje simple.
+The video shows Vantage, a web dashboard for tracking the market, creating watchlists, maintaining a manually entered portfolio, and setting price alerts. It is a demo with simulated U.S. stock quotes. Most of its structure is useful for this app; the main gaps are Argentine assets (CEDEARs, local stocks, bonds, MEP/CCL exchange rates), real market data, and plain-language explanations of each metric.
 
-## Qué hace la app del video
+## What the app in the video does
 
-Vantage es un tracker personal para un inversor individual: muestra el mercado, guarda favoritos y calcula el rendimiento de una cartera. No opera ni se conecta a un bróker. En la grabación (30 segundos, sin audio) todo es demo: los precios son simulados y los datos se guardan en el navegador.
+Vantage is a personal tracker for an individual investor. It shows the market, saves watchlists, and calculates portfolio returns. It does not trade or connect to a broker. In the 30-second silent recording, everything is a demo: prices are simulated and data is stored in the browser.
 
-| Pantalla | Qué muestra | Qué se puede hacer |
+| Screen | What it shows | Available actions |
 | --- | --- | --- |
-| Overview | Tres tarjetas de índices (S&P 500, Nasdaq, Dow Jones) con valor, variación y mini gráfico. Gráfico del activo elegido con apertura, máximo, mínimo, cierre anterior y volumen. Panel de favoritos, ranking de movimientos y tres noticias. | Elegir un activo de favoritos para cambiar el gráfico. Cambiar rango (1D, 1W, 1M, 3M, 6M, 1Y, ALL). Alternar línea y velas. Pantalla completa. Menú con "crear alerta" y "exportar datos". Pausar el feed en vivo. |
-| Markets | Los mismos índices y una tabla de 15 empresas: bolsa, precio, variación, volumen, capitalización y tendencia. | Filtrar por sector (Technology, Consumer, Finance, Energy). Buscar una empresa. Ordenar por columna. Crear alerta desde la campanita de cada fila. |
-| Watchlist | Listas de favoritos en pestañas con contador (My watchlist 10, Tech leaders 6) y la misma tabla de Markets. | Crear una lista nueva. Editar los símbolos. Quitar un favorito con la estrella. Crear alerta. |
-| Portfolio | Valor total, retorno histórico en dólares y en porcentaje, total invertido. Gráfico de una posición. Tabla de posiciones: cantidad, costo promedio, valor de mercado, retorno y porcentaje de la cartera. | Agregar una posición. Eliminarla. Exportar las posiciones. |
-| News & insights | Una nota destacada y una grilla de notas con categoría, fuente y antigüedad. | Filtrar por categoría (Markets, Technology, Economy). Abrir una nota. Botón "Daily briefing". |
-| Price alerts | La pantalla no se abre en el video; se ve el contador (3) en el menú y el formulario de creación. | Elegir el activo, la condición ("el precio sube por encima de") y el precio objetivo, que viene precargado un 2% arriba del actual. |
+| Overview | Three index cards (S&P 500, Nasdaq, Dow Jones) with value, change, and a sparkline. A chart for the selected asset with open, high, low, previous close, and volume. A watchlist panel, movers ranking, and three news items. | Select a watchlist asset to change the chart. Change range (1D, 1W, 1M, 3M, 6M, 1Y, ALL). Switch between line and candlestick views. Full screen. Chart menu with “create alert” and “export data.” Pause the live feed. |
+| Markets | The same indexes and a 15-company table with exchange, price, change, volume, market cap, and trend. | Filter by sector (Technology, Consumer, Finance, Energy). Search companies. Sort by column. Create an alert from each row’s bell icon. |
+| Watchlist | Watchlists in tabs with counts (My watchlist 10, Tech leaders 6) and the same table as Markets. | Create a list. Edit symbols. Remove a favorite with the star. Create an alert. |
+| Portfolio | Total value, historical return in dollars and percent, and total invested. A chart for one holding. Holdings table with quantity, average cost, market value, return, and portfolio weight. | Add or remove a holding. Export holdings. |
+| News & insights | One featured story and a grid of stories with category, source, and age. | Filter by category (Markets, Technology, Economy). Open a story. Use “Daily briefing.” |
+| Price alerts | The screen does not open in the video; a count of 3 appears in the menu along with the creation form. | Choose an asset, condition (“price rises above”), and target price, prefilled at 2% above the current price. |
 
-Todas las pantallas comparten un menú lateral con accesos directos a las listas, un buscador global (Ctrl K), campanita de notificaciones, perfil con nombre y email, y un pie con el estado del sistema y la hora de la última actualización.
+All screens share a sidebar with watchlist shortcuts, a global search (Ctrl K), notification bell, name and email profile, and a footer showing system status and the last update time.
 
-## Requerimientos funcionales
+## Functional requirements
 
-Son 54: 31 para la primera versión (MVP), 18 para una segunda y 5 para más adelante. La prioridad es una propuesta; cambiala desde el desplegable. La última columna dice si el requerimiento sale del video o es un agregado para el mercado argentino.
+There are 54 requirements: 31 for the first release (MVP), 18 for a second release, and 5 for later. Priorities are proposals and can be changed. The last column says whether a requirement comes from the video or is an addition for the Argentine market.
 
-### A. Instrumentos y datos de mercado
+### A. Instruments and market data
 
-| ID | Requerimiento | Prioridad | En el video |
+| ID | Requirement | Priority | In video |
 | --- | --- | --- | --- |
-| RF-01 | Catálogo de instrumentos por tipo: CEDEAR, acción local, bono soberano, obligación negociable, letra y FCI. Cada uno con ticker, nombre, mercado y moneda. | MVP | No (solo acciones de EE.UU.) |
-| RF-02 | Cotización por instrumento: último precio, variación del día en monto y porcentaje, apertura, máximo, mínimo, cierre anterior y volumen. | MVP | Sí |
-| RF-03 | Histórico de precios por rango: 1 día, 1 semana, 1, 3 y 6 meses, 1 año y todo. | MVP | Sí |
-| RF-04 | Actualización periódica de precios, con hora de la última actualización visible y botón para pausar. | MVP | Sí |
-| RF-05 | Tarjetas de referencia en el inicio: Merval, dólar MEP, dólar CCL y riesgo país. | MVP | Parcial (usa S&P 500, Nasdaq y Dow Jones) |
-| RF-06 | Buscador global por ticker o nombre, con atajo de teclado. | MVP | Sí |
-| RF-07 | Selector de moneda de visualización: pesos, dólar MEP o dólar CCL. | V2 | No (todo en USD) |
+| RF-01 | Instrument catalog by type: CEDEAR, local stock, sovereign bond, corporate bond, bill, and mutual fund. Each has a ticker, name, market, and currency. | MVP | No (U.S. stocks only) |
+| RF-02 | Quote per instrument: last price, daily change in amount and percent, open, high, low, previous close, and volume. | MVP | Yes |
+| RF-03 | Historical prices by range: 1 day, 1 week, 1, 3, and 6 months, 1 year, and all time. | MVP | Yes |
+| RF-04 | Periodic price updates, with the last update time visible and a pause button. | MVP | Yes |
+| RF-05 | Home reference cards: Merval, MEP dollar, CCL dollar, and country risk. | MVP | Partial (uses S&P 500, Nasdaq, and Dow Jones) |
+| RF-06 | Global search by ticker or name, with a keyboard shortcut. | MVP | Yes |
+| RF-07 | Display currency selector: pesos, MEP dollar, or CCL dollar. | V2 | No (USD only) |
 
-### B. Explorador de mercado
+### B. Market explorer
 
-| ID | Requerimiento | Prioridad | En el video |
+| ID | Requirement | Priority | In video |
 | --- | --- | --- | --- |
-| RF-08 | Tabla de instrumentos con precio, variación, volumen y tendencia (mini gráfico), ordenable por columna. | MVP | Sí |
-| RF-09 | Filtro por tipo de activo (CEDEARs, bonos, acciones) y, dentro de cada tipo, por sector, emisor o ley. | MVP | Parcial (filtra solo por sector) |
-| RF-10 | Búsqueda dentro de la tabla. | MVP | Sí |
-| RF-11 | Ranking de movimientos: más operados, mayores subas y mayores bajas. | V2 | Sí |
-| RF-12 | Acciones por fila: agregar a favoritos y crear alerta. | MVP | Sí |
+| RF-08 | Instrument table with price, change, volume, and trend (sparkline), sortable by column. | MVP | Yes |
+| RF-09 | Filter by asset type (CEDEARs, bonds, stocks), then by sector, issuer, or governing law. | MVP | Partial (sector only) |
+| RF-10 | Search within the table. | MVP | Yes |
+| RF-11 | Movers ranking: most traded, top gainers, and top losers. | V2 | Yes |
+| RF-12 | Row actions: add to watchlist and create an alert. | MVP | Yes |
 
-### C. Detalle y análisis de un instrumento
+### C. Instrument detail and analysis
 
-| ID | Requerimiento | Prioridad | En el video |
+| ID | Requirement | Priority | In video |
 | --- | --- | --- | --- |
-| RF-13 | Gráfico de precio con vista de línea y de velas, selector de rango, tooltip con fecha y precio, pantalla completa y estadísticas del día debajo. | MVP | Sí |
-| RF-50 | Indicadores técnicos básicos sobre el gráfico: medias móviles y volumen. | MVP | No |
-| RF-51 | Indicadores técnicos avanzados (RSI, MACD, bandas de Bollinger) y líneas de tendencia dibujadas a mano. | V2 | No |
-| RF-52 | Ratios fundamentales de acciones y CEDEARs: PER (P/E), ganancia por acción, rendimiento por dividendo, precio sobre valor libro, ROE y deuda sobre patrimonio. | MVP | No (solo muestra capitalización) |
-| RF-14 | Exportar los datos del gráfico a CSV. | V2 | Sí |
-| RF-15 | Ficha de CEDEAR: subyacente, ratio de conversión, precio del subyacente en USD, CCL implícito y brecha contra el CCL de referencia. | MVP | No |
-| RF-16 | Ficha de bono: TIR, paridad, duration, valor técnico, cupón, ley, moneda de pago, vencimiento y cronograma de pagos. | MVP | No |
-| RF-17 | Comparar dos o más instrumentos en un mismo gráfico, con rendimiento en base 100. | V2 | No |
-| RF-18 | Curva de rendimientos de bonos: TIR contra duration. | V2 | No |
+| RF-13 | Price chart with line and candlestick views, range selector, date-and-price tooltip, full-screen mode, and daily statistics below. | MVP | Yes |
+| RF-50 | Basic technical indicators on the chart: moving averages and volume. | MVP | No |
+| RF-51 | Advanced technical indicators (RSI, MACD, Bollinger Bands) and manually drawn trend lines. | V2 | No |
+| RF-52 | Fundamental ratios for stocks and CEDEARs: P/E, earnings per share, dividend yield, price-to-book, ROE, and debt-to-equity. | MVP | No (market cap only) |
+| RF-14 | Export chart data to CSV. | V2 | Yes |
+| RF-15 | CEDEAR profile: underlying asset, conversion ratio, underlying price in USD, implied CCL, and spread versus the reference CCL. | MVP | No |
+| RF-16 | Bond profile: yield to maturity, parity, duration, technical value, coupon, governing law, payment currency, maturity, and payment schedule. | MVP | No |
+| RF-17 | Compare two or more instruments on one chart, with returns rebased to 100. | V2 | No |
+| RF-18 | Bond yield curve: yield to maturity versus duration. | V2 | No |
 
-### D. Favoritos
+### D. Watchlists
 
-| ID | Requerimiento | Prioridad | En el video |
+| ID | Requirement | Priority | In video |
 | --- | --- | --- | --- |
-| RF-19 | Marcar y desmarcar un favorito con la estrella, desde cualquier tabla o ficha. | MVP | Sí |
-| RF-20 | Varias listas con nombre propio: crear, renombrar y eliminar. | MVP | Sí |
-| RF-21 | Vista de cada lista con la tabla del explorador y contador de símbolos. | MVP | Sí |
-| RF-22 | Acceso directo a las listas desde el menú lateral y panel de favoritos en el inicio; al elegir un activo se actualiza el gráfico. | MVP | Sí |
-| RF-23 | Listas que mezclan tipos de activo y muestran columnas acordes: TIR para bonos, ratio para CEDEARs. | V2 | No |
+| RF-19 | Toggle a favorite with the star from any table or profile. | MVP | Yes |
+| RF-20 | Multiple named lists: create, rename, and delete. | MVP | Yes |
+| RF-21 | Each list uses the explorer table and shows its symbol count. | MVP | Yes |
+| RF-22 | Watchlist shortcuts in the sidebar and a watchlist panel on Home; selecting an asset updates the chart. | MVP | Yes |
+| RF-23 | Lists can mix asset types and show relevant columns, such as yield for bonds and ratio for CEDEARs. | V2 | No |
 
-### E. Cartera
+### E. Portfolio
 
-| ID | Requerimiento | Prioridad | En el video |
+| ID | Requirement | Priority | In video |
 | --- | --- | --- | --- |
-| RF-24 | Carga manual de posiciones: instrumento, cantidad, precio promedio de compra y fecha. | MVP | Sí (el formulario no se abre) |
-| RF-25 | Resumen de la cartera: valor total, total invertido y retorno en monto y porcentaje. | MVP | Sí |
-| RF-26 | Tabla de posiciones: cantidad, costo promedio, valor de mercado, retorno y porcentaje de la cartera; eliminar una posición. | MVP | Sí |
-| RF-27 | Exportar las posiciones a CSV. | V2 | Sí |
-| RF-28 | Distribución de la cartera por tipo de activo y por moneda. | V2 | No |
-| RF-29 | Valuación de la cartera en pesos y en dólares (MEP o CCL). | V2 | No |
-| RF-30 | Importar las tenencias desde el bróker en lugar de cargarlas a mano. | Más adelante | No (aclara que no hay bróker conectado) |
-| RF-31 | Calendario de cobros de cupones y amortizaciones de los bonos en cartera. | Más adelante | No |
+| RF-24 | Manually add holdings: instrument, quantity, average purchase price, and date. | MVP | Yes (form not shown) |
+| RF-25 | Portfolio summary: total value, total invested, and return in amount and percent. | MVP | Yes |
+| RF-26 | Holdings table: quantity, average cost, market value, return, and portfolio weight; allow removing a holding. | MVP | Yes |
+| RF-27 | Export holdings to CSV. | V2 | Yes |
+| RF-28 | Portfolio allocation by asset type and currency. | V2 | No |
+| RF-29 | Value the portfolio in pesos and in MEP or CCL dollars. | V2 | No |
+| RF-30 | Import holdings from a broker instead of entering them manually. | Later | No (the video says no broker is connected) |
+| RF-31 | Calendar of coupon and principal payments for bonds in the portfolio. | Later | No |
 
-### F. Alertas de precio
+### F. Price alerts
 
-| ID | Requerimiento | Prioridad | En el video |
+| ID | Requirement | Priority | In video |
 | --- | --- | --- | --- |
-| RF-32 | Crear una alerta desde una fila, desde el menú del gráfico o desde la pantalla de alertas: instrumento, condición (sube por encima de, baja por debajo de) y valor objetivo precargado cerca del precio actual. | MVP | Sí (solo se ve "sube por encima de") |
-| RF-33 | Listado de alertas activas y disparadas, con contador en el menú; editar y eliminar. | MVP | Parcial (se ve el contador, no la pantalla) |
-| RF-34 | Notificación dentro de la app cuando una alerta se dispara, con el instrumento, el precio alcanzado y la hora. | MVP | Parcial (se ve la campanita, no un aviso) |
-| RF-36 | Notificación por email o push con la app cerrada; exige evaluar las alertas en el servidor. | MVP | No (solo evalúa con la app abierta) |
-| RF-35 | Alertas por variación porcentual y, en bonos, por TIR o paridad. | V2 | No |
+| RF-32 | Create an alert from a row, chart menu, or alerts screen: instrument, condition (rises above or falls below), and target value prefilled near the current price. | MVP | Yes (only “rises above” is shown) |
+| RF-33 | List active and triggered alerts, show a menu count, and allow editing and deletion. | MVP | Partial (count shown, screen not shown) |
+| RF-34 | In-app notification when an alert triggers, including instrument, reached price, and time. | MVP | Partial (bell shown, no notification) |
+| RF-36 | Email or push notification while the app is closed; requires server-side alert evaluation. | MVP | No (evaluation only while app is open) |
+| RF-35 | Alerts for percentage change and, for bonds, yield or parity. | V2 | No |
 
-### G. Noticias
+### G. News
 
-| ID | Requerimiento | Prioridad | En el video |
+| ID | Requirement | Priority | In video |
 | --- | --- | --- | --- |
-| RF-37 | Feed de noticias con nota destacada, categoría, fuente y antigüedad; filtro por categoría. | V2 | Sí |
-| RF-38 | Noticias relacionadas con los instrumentos de favoritos y de la cartera. | Más adelante | No |
-| RF-39 | Resumen diario del mercado. | Más adelante | Parcial (se ve el botón "Daily briefing") |
+| RF-37 | News feed with a featured story, category, source, and age; filter by category. | V2 | Yes |
+| RF-38 | News related to watchlist and portfolio instruments. | Later | No |
+| RF-39 | Daily market briefing. | Later | Partial (“Daily briefing” button is shown) |
 
-### H. Cuenta y configuración
+### H. Account and settings
 
-| ID | Requerimiento | Prioridad | En el video |
+| ID | Requirement | Priority | In video |
 | --- | --- | --- | --- |
-| RF-40 | Perfil con nombre y email. | MVP | Sí |
-| RF-41 | Registro e inicio de sesión, con favoritos, cartera y alertas guardados en servidor. | V2 | No (guarda todo en el navegador) |
-| RF-42 | Personalizar el inicio: qué paneles se muestran y en qué orden. | Más adelante | Parcial (se ve el botón "Customize") |
-| RF-43 | Preferencias: moneda por defecto, tema claro u oscuro y frecuencia de actualización. | V2 | No (Settings no se abre) |
+| RF-40 | Profile with name and email. | MVP | Yes |
+| RF-41 | Registration and sign-in, with watchlists, portfolio, and alerts stored on the server. | V2 | No (everything is stored in the browser) |
+| RF-42 | Customize which Home panels are displayed and their order. | Later | Partial (“Customize” button is shown) |
+| RF-43 | Preferences: default currency, light or dark theme, and update frequency. | V2 | No (Settings does not open) |
 
-### I. Ayuda para aprender y decidir
+### I. Help for learning and decision-making
 
-Nada de esto está en el video: es lo que convierte al tracker en una herramienta para decidir sin ser experto.
+None of this appears in the video. These features turn the tracker into a tool for making informed decisions without expert knowledge.
 
-| ID | Requerimiento | Prioridad | En el video |
+| ID | Requirement | Priority | In video |
 | --- | --- | --- | --- |
-| RF-44 | Ayuda en cada dato: un ícono junto a cada valor (PER, TIR, paridad, ratio, volumen, variación) que explica en lenguaje simple qué es, cómo se lee y por qué importa. | MVP | No |
-| RF-45 | Glosario buscable de términos: CEDEAR, bono, obligación negociable, PER, TIR, duration, MEP, CCL. | MVP | No |
-| RF-46 | Ficha "qué es" de cada instrumento en lenguaje simple: qué es, quién lo emite, en qué moneda paga, de qué depende su precio y cuáles son sus riesgos. | MVP | No |
-| RF-53 | Sección "Aprender" con guías paso a paso: cómo analizar una acción o un CEDEAR, cómo analizar un bono y cómo leer un gráfico de velas. | MVP | No |
-| RF-54 | Análisis guiado de un instrumento: recorre la guía con los datos reales de ese activo y marca qué mirar en cada paso. | V2 | No |
-| RF-47 | Lectura en contexto de cada indicador: lo compara con su propio histórico y con instrumentos similares, y lo dice en una frase ("el volumen de hoy duplica el promedio del mes"). | V2 | No |
-| RF-48 | Resumen diario de tus favoritos y tu cartera: qué se movió, cuánto y qué noticias lo acompañan. | V2 | No |
-| RF-49 | Asistente de preguntas en lenguaje natural sobre un instrumento o sobre tu cartera, con respuestas apoyadas en los datos de la app. | V2 | No |
+| RF-44 | Contextual help for each metric: an icon beside values (P/E, yield, parity, ratio, volume, change) explains what it is, how to read it, and why it matters in plain language. | MVP | No |
+| RF-45 | Searchable glossary: CEDEAR, bond, corporate bond, P/E, yield, duration, MEP, CCL. | MVP | No |
+| RF-46 | Plain-language “what it is” profile for each instrument: what it is, who issues it, payment currency, price drivers, and risks. | MVP | No |
+| RF-53 | Learn section with step-by-step guides: analyzing a stock or CEDEAR, analyzing a bond, and reading a candlestick chart. | MVP | No |
+| RF-54 | Guided instrument analysis that walks through the guide using that asset’s real data and highlights what to inspect at each step. | V2 | No |
+| RF-47 | Put each indicator in context by comparing it with its history and similar instruments, and summarizing it in one sentence (“today’s volume is twice the monthly average”). | V2 | No |
+| RF-48 | Daily summary of watchlists and portfolio: what moved, by how much, and related news. | V2 | No |
+| RF-49 | Natural-language assistant for questions about an instrument or portfolio, with answers grounded in app data. | V2 | No |
 
-## Requerimientos no funcionales
+## Non-functional requirements
 
-| ID | Requerimiento |
+| ID | Requirement |
 | --- | --- |
-| RNF-01 | Transparencia del dato: cada cotización muestra su origen, su hora y si tiene demora. |
-| RNF-02 | Fuente de datos desacoplada: un adaptador por proveedor, para cambiar de fuente sin tocar la interfaz, y caché para respetar los límites de la API. |
-| RNF-03 | Credenciales del proveedor de datos solo en el backend, nunca en el navegador. |
-| RNF-04 | Importes con decimales exactos (sin punto flotante) y moneda explícita en cada valor. |
-| RNF-05 | Estados de carga, vacío y error en cada panel: sin datos, mercado cerrado o proveedor caído. |
-| RNF-06 | Tablas de cientos de instrumentos que ordenan y filtran sin recargar la página. |
-| RNF-07 | Interfaz en español con formato numérico argentino (1.234,56). |
-| RNF-08 | La ayuda explica y da contexto mostrando en qué se basa. La app no ejecuta operaciones y la decisión queda en tus manos. |
-| RNF-09 | Diseño en la línea del video: menú lateral fijo, tarjetas de resumen, tablas con mini gráficos, un panel de gráfico grande y un solo color de acento, con nombre y marca propios. |
+| NRF-01 | Data transparency: every quote shows its source, timestamp, and whether it is delayed. |
+| NRF-02 | Decoupled data sources: one adapter per provider, so providers can change without modifying the UI; cache data to respect API limits. |
+| NRF-03 | Provider credentials stay on the backend and are never exposed in the browser. |
+| NRF-04 | Monetary values use exact decimal arithmetic (not floating point) and always specify a currency. |
+| NRF-05 | Every panel has loading, empty, and error states, including no data, closed market, and provider outage. |
+| NRF-06 | Tables with hundreds of instruments sort and filter without reloading the page. |
+| NRF-07 | Spanish UI with Argentine number formatting (1.234,56). |
+| NRF-08 | Help explains and contextualizes metrics, showing its basis. The app does not execute trades; the decision remains with the user. |
+| NRF-09 | Follow the video’s visual direction: fixed sidebar, summary cards, tables with sparklines, one large chart panel, one accent color, and original branding. |
 
-## Lo que el video no muestra
+## What the video does not show
 
-Varias partes aparecen solo como botón o ítem de menú, así que sus requerimientos están inferidos y no observados: la pantalla de Price alerts, Settings, Customize, los formularios de "Add position", "Manage watchlist", "Edit symbols" y "New list", los resultados del buscador, el panel de notificaciones y el "Daily briefing". Tampoco se ve la versión mobile.
+Several requirements are inferred rather than observed because they appear only as a button or menu item: the Price alerts, Settings, and Customize screens; the “Add position,” “Manage watchlist,” “Edit symbols,” and “New list” forms; search results; the notification panel; and “Daily briefing.” The mobile version is also not shown.
 
-## Decisiones abiertas
+## Open decisions
 
-- [x] Uso personal, según lo que contaste: el login y el guardado en servidor (RF-41) quedan fuera del MVP.
-- [ ] ¿Qué fuente de datos? Pediste tiempo real: de las dos revisadas, la API de IOL lo da con solo tener cuenta. Falta confirmar costo y límites de uso.
-- [ ] ¿Qué tipos de activo entran primero? Con CEDEARs, acciones y bonos soberanos ya se cubre lo que pediste.
-- [ ] ¿Solo seguimiento o también importar la cartera real del bróker (RF-30)?
-- [ ] ¿Hace falta mobile o alcanza con desktop, como en el video?
-- [ ] ¿Entran las noticias? Es el módulo que menos aporta al análisis.
+- [x] Personal use, as discussed: sign-in and server-side storage (RF-41) are out of scope for the MVP.
+- [ ] Which data source? Real-time data was requested. Of the two options reviewed, IOL’s API provides it with an account. Cost and usage limits still need confirmation.
+- [ ] Which asset types come first? CEDEARs, stocks, and sovereign bonds cover the initial request.
+- [ ] Tracking only, or also importing the actual broker portfolio (RF-30)?
+- [ ] Is mobile support required, or is desktop sufficient as in the video?
+- [ ] Should news be included? It contributes the least to the analysis.
 
-## Fuentes de datos a evaluar
+## Data sources to evaluate
 
-Es la diferencia más grande con el video, que no usa datos reales. Revisé dos opciones; costos y límites de uso quedan por confirmar en cada una.
+Real market data is the biggest difference from the video. Two options were reviewed; their costs and usage limits still need confirmation.
 
-| Fuente | Qué ofrece | Condiciones |
+| Source | What it offers | Conditions |
 | --- | --- | --- |
-| [API de InvertirOnline](https://www.invertironline.com/api) | Cotizaciones en tiempo real e históricas del mercado argentino (acciones, bonos, opciones, cauciones, futuros, monedas), además de portafolio y operaciones. Responde en JSON y tiene entorno de pruebas. | Requiere una cuenta en IOL. El costo figura en su página de tarifas. Falta confirmar en la [documentación](https://api.invertironline.com/) la cobertura de CEDEARs y FCI. |
-| [BYMA Market Data](https://www.byma.com.ar/productos/productos-de-datos) | Datos en tiempo real, con 20 minutos de demora, históricos, de cierre y de referencia de instrumentos. Acceso por API o por protocolo FIX. | El tiempo real exige un contrato de Market Data con BYMA (marketdata@byma.com.ar). |
+| [InvertirOnline API](https://www.invertironline.com/api) | Real-time and historical Argentine market quotes (stocks, bonds, options, repos, futures, and currencies), plus portfolio and transactions. JSON responses and a test environment. | Requires an IOL account. Pricing is listed on its fees page. Confirm CEDEAR and mutual fund coverage in the [documentation](https://api.invertironline.com/). |
+| [BYMA Market Data](https://www.byma.com.ar/productos/productos-de-datos) | Real-time data, data delayed by 20 minutes, historical, closing, and reference data for instruments. Available through API or FIX protocol. | Real-time data requires a BYMA Market Data contract (marketdata@byma.com.ar). |
 
-El dólar MEP y el CCL no necesitan una fuente aparte: se calculan con los precios de un mismo bono en pesos y en dólares (por ejemplo AL30 contra AL30D y AL30C).
+MEP and CCL exchange rates do not need a separate source: they can be calculated from the prices of the same bond in pesos and dollars (for example, AL30 versus AL30D and AL30C).
 
-Los ratios fundamentales (PER, ganancia por acción, dividendos) son un dato aparte: no confirmé que estas dos fuentes los incluyan, así que puede hacer falta una tercera.
+Fundamental ratios (P/E, earnings per share, dividends) are a separate data need. It has not been confirmed that either source provides them, so a third source may be required.

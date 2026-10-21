@@ -1,44 +1,44 @@
 # Mirador
 
-Seguimiento de inversiones con mercados públicos, investigación, listas, portafolio y alertas. Next.js 16, Prisma 7 y PostgreSQL.
+Investment tracking for public markets, research, watchlists, portfolios, and alerts. Built with Next.js 16, Prisma 7, and PostgreSQL.
 
-## Acceso
+## Access
 
-Inicio, Mercados, instrumentos, Aprender y Glosario se pueden consultar sin ingresar. Investigación, Portafolio, Favoritos, Alertas y Ajustes requieren Google. Solo `fervon96@gmail.com` y `nicovon24@gmail.com` están autorizados, y cada cuenta ve sus propios datos. Conectar IOL desde Portafolio es opcional y se hace con OAuth para esa cuenta.
+Home, Markets, instruments, Learn, and Glossary are available without signing in. Research, Portfolio, Watchlists, Alerts, and Settings require Google sign-in. Only `fervon96@gmail.com` and `nicovon24@gmail.com` are authorized, and each account can see only its own data. Connecting IOL from Portfolio is optional and uses OAuth for that account.
 
-El ingreso con Google necesita `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` y `MIRADOR_APP_URL`. En Google Cloud, registrar exactamente `${MIRADOR_APP_URL}/api/auth/google/callback` como URI de redirección. Para desarrollo local usar `http://localhost:3000`; para Docker publicado en el puerto 3001 usar `http://localhost:3001`. Cada entorno requiere su URL fija y sus credenciales propias. La aplicación valida la identidad Google y la lista de correos en el servidor.
+Google sign-in requires `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, and `MIRADOR_APP_URL`. In Google Cloud, register exactly `${MIRADOR_APP_URL}/api/auth/google/callback` as the redirect URI. Use `http://localhost:3000` for local development and `http://localhost:3001` for Docker on port 3001. Each environment needs its own fixed URL and credentials. The application validates the Google identity and email allowlist on the server.
 
-## Desarrollo local
+## Local development
 
-1. Crear `.env` desde `.env.example` y configurar una base de desarrollo aislada. Comprobar la URL antes de ejecutar cualquier migración. No usar la base de producción para pruebas.
-2. `npm install`
-3. `docker compose up -d db` para PostgreSQL local.
-4. `npm run db:migrate` y `npm run db:seed` contra esa base local.
-5. `npm run dev` y abrir <http://localhost:3000>.
+1. Create `.env` from `.env.example` and configure an isolated development database. Check the URL before running any migration. Never use the production database for testing.
+2. Run `npm install`.
+3. Run `docker compose up -d db` to start local PostgreSQL.
+4. Run `npm run db:migrate` and `npm run db:seed` against that local database.
+5. Run `npm run dev` and open <http://localhost:3000>.
 
 ## Docker
 
-Configurar `GOOGLE_CLIENT_ID` y `GOOGLE_CLIENT_SECRET` en `.env`, y registrar `http://localhost:3001/api/auth/google/callback` en el cliente web de Google. Luego ejecutar `docker compose up --build -d` y abrir <http://localhost:3001>. Compose fija `MIRADOR_APP_URL=http://localhost:3001` y habilita HTTP solo para este entorno local. También levanta la base local, aplica las migraciones y carga solo el catálogo público. Los datos persisten en `mirador-db`.
+Set `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` in `.env`, and register `http://localhost:3001/api/auth/google/callback` in the Google web client. Then run `docker compose up --build -d` and open <http://localhost:3001>. Compose sets `MIRADOR_APP_URL=http://localhost:3001` and enables HTTP only for this local environment. It also starts the local database, applies migrations, and loads only the public catalog. Data persists in `mirador-db`.
 
-## Fuentes y alertas
+## Data sources and alerts
 
-| Fuente | Configuración | Uso |
+| Source | Configuration | Use |
 | --- | --- | --- |
-| data912 y Yahoo | Sin clave | Cotizaciones públicas, con posible demora |
-| Finnhub | `FINNHUB_API_KEY` | Datos de EE.UU. e investigación |
-| InvertirOnline | `IOL_SESSION_SECRET`, `IOL_MCP_CALLBACK_URI` | Conexión OAuth personal y de lectura desde Portafolio |
-| Telegram | `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET` | Alertas vinculadas a la cuenta Mirador |
+| data912 and Yahoo | No key required | Public quotes, which may be delayed |
+| Finnhub | `FINNHUB_API_KEY` | U.S. data and research |
+| InvertirOnline | `IOL_SESSION_SECRET`, `IOL_MCP_CALLBACK_URI` | Personal, read-only OAuth connection from Portfolio |
+| Telegram | `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET` | Alerts linked to the Mirador account |
 
-El cron `/api/cron/alerts` requiere `CRON_SECRET`. El webhook de Telegram valida su propio secreto. El código de vinculación Telegram vence, se usa una vez y pertenece a quien lo generó en Ajustes.
+The `/api/cron/alerts` cron job requires `CRON_SECRET`. The Telegram webhook validates its own secret. Telegram linking codes expire, can be used once, and belong to the account that created them in Settings.
 
 ## Vercel
 
-1. Verificar que el proyecto Vercel y el repositorio correspondan al dominio que se va a publicar.
-2. Configurar en **Production** `DATABASE_URL`, `MIRADOR_APP_URL=https://mirador-inversiones.vercel.app`, `GOOGLE_CLIENT_ID` y `GOOGLE_CLIENT_SECRET`. Registrar `https://mirador-inversiones.vercel.app/api/auth/google/callback` en un cliente web de Google para producción. Configurar `IOL_SESSION_SECRET` e `IOL_MCP_CALLBACK_URI` si se usará IOL. `DIRECT_URL` puede indicar la conexión directa para migraciones. No configurar `MIRADOR_LOCAL_AUTH` en Vercel.
-3. En **Preview** y **Development**, usar una base, origen y cliente Google propios. El callback debe coincidir con un dominio estable por entorno. Si falta esa configuración, el ingreso privado queda cerrado.
-4. Hacer respaldo y revisar la migración antes de `npm run db:migrate:deploy`. Los registros privados anteriores quedan en cuarentena sin dueño; no se asignan a la primera cuenta que ingresa. La atribución requiere confirmar titularidad y un procedimiento explícito.
-5. Probar el recorrido completo en el dominio productivo: visitante en páginas públicas y redirección a `/login` en páginas privadas; ingreso con cada uno de los dos correos autorizados; rechazo de un tercero; portafolios separados; cierre de sesión que revoca la cookie y vuelve a Inicio. Verificar la conexión IOL solo en la cuenta que la autorizó. No reactivar despliegues antiguos que exponían la cartera global.
+1. Verify that the Vercel project and repository match the domain you intend to publish.
+2. In **Production**, configure `DATABASE_URL`, `MIRADOR_APP_URL=https://mirador-inversiones.vercel.app`, `GOOGLE_CLIENT_ID`, and `GOOGLE_CLIENT_SECRET`. Register `https://mirador-inversiones.vercel.app/api/auth/google/callback` in a Google web client for production. Configure `IOL_SESSION_SECRET` and `IOL_MCP_CALLBACK_URI` if IOL will be used. `DIRECT_URL` may specify the direct connection for migrations. Do not configure `MIRADOR_LOCAL_AUTH` in Vercel.
+3. In **Preview** and **Development**, use a separate database, origin, and Google client. The callback must match a stable domain for each environment. Private sign-in remains disabled if this configuration is missing.
+4. Back up the database and review the migration before running `npm run db:migrate:deploy`. Previous private records remain quarantined without an owner; they are never assigned to the first account that signs in. Attribution requires verified ownership and an explicit procedure.
+5. Test the full flow on the production domain: public pages for visitors and redirects to `/login` for private pages; sign-in with each of the two authorized emails; rejection of a third party; separate portfolios; and sign-out that revokes the cookie and returns to Home. Verify that the IOL connection is available only to the account that authorized it. Do not reactivate older deployments that exposed the shared portfolio.
 
-Eliminar `IOL_USERNAME`, `IOL_PASSWORD`, `APP_ACCESS_USER` y `APP_ACCESS_PASSWORD` de Development, Preview y Production, incluidas variables específicas de ramas. Esas variables pertenecen al acceso anterior y no se usan en esta versión. La cotización pública de Argentina usa data912. La conexión IOL personal mantiene sus variables OAuth y su clave de cifrado.
+Remove `IOL_USERNAME`, `IOL_PASSWORD`, `APP_ACCESS_USER`, and `APP_ACCESS_PASSWORD` from Development, Preview, and Production, including branch-specific variables. Those variables belong to the previous access model and are not used in this version. Public quotes for Argentina use data912. Personal IOL connections retain their OAuth variables and encryption key.
 
-Comandos de comprobación: `npm test`, `npm run lint`, `npm run build`.
+Verification commands: `npm test`, `npm run lint`, and `npm run build`.

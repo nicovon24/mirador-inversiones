@@ -7,3 +7,9 @@ This version has breaking changes — APIs, conventions, and file structure may 
 This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
 
 <!-- END:nextjs-agent-rules -->
+
+## Repository language policy
+
+- Keep repository documentation (README files, plans, and technical guides) in English by default. Use Spanish only when a document is explicitly intended for Spanish-speaking users or the user requests it.
+- Keep the product UI and user-facing copy in Spanish by default. Add or change languages only as part of an explicit localization request or product requirement.
+- Preserve technical identifiers, API names, and requirement IDs when translating documentation.

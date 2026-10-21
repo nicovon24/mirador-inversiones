@@ -1,27 +1,27 @@
-# Plan de identidad, aislamiento de datos e integración IOL
+# Identity, Data Isolation, and IOL Integration Plan
 
-Fecha: 2026-10-20. Estado: implementación local y corte de seguridad productivo realizados; activación privada pendiente de configuración Google y migración productiva.
+Date: 2026-10-20. Status: local implementation and production security cutover completed; private access activation is pending Google configuration and the production migration.
 
-Este documento comenzó como análisis de Astra high y sigue registrando sus decisiones. El estado actual de ejecución se detalla al final. El workspace contiene cambios previos del usuario, incluidos archivos sin seguimiento, que se preservaron.
+This document began as an analysis by Astra high and continues to record its decisions. Current execution status is at the end. Existing user changes in the workspace, including untracked files, were preserved.
 
-Decisión confirmada: login Mirador con Google OIDC y acceso privado limitado exclusivamente a `fervon96@gmail.com` y `nicovon24@gmail.com`. Son dos cuentas individuales. Esta lista reemplaza cualquier correo mencionado anteriormente. Cada persona debe autenticarse con Google y acreditar el correo verificado; su inclusión en la lista no asigna datos antiguos ni el rol OWNER.
+Confirmed decision: Mirador sign-in uses Google OIDC, with private access restricted exclusively to `fervon96@gmail.com` and `nicovon24@gmail.com`. These are two individual accounts. This list replaces any previously mentioned email addresses. Each person must authenticate with Google and prove control of the verified email; inclusion on the list does not assign old data or the OWNER role.
 
-## 1. Resultado esperado
+## 1. Expected outcome
 
-Mirador tiene cuentas y sesiones propias con autenticación Google. Solo los dos correos autorizados pueden darse de alta e iniciar sesión para usar Investigación, Portafolio, Favoritos, Alertas y Ajustes, sin necesitar cuenta IOL. Conectar IOL es una operación opcional posterior al login de Mirador y solo incorpora la cartera de esa persona mediante OAuth.
+Mirador has its own accounts and sessions, authenticated with Google. Only the two authorized email addresses can register and sign in to use Research, Portfolio, Watchlists, Alerts, and Settings; an IOL account is not required. Connecting IOL is optional after Mirador sign-in and imports only that person's portfolio through OAuth.
 
-| Actor | Acceso |
+| Actor | Access |
 | --- | --- |
-| Público sin sesión | Inicio, Mercados, instrumentos, Aprender y Glosario; sus APIs exclusivamente de datos públicos |
-| USER autenticado | Secciones públicas y privadas; únicamente sus listas, posiciones, alertas, notificaciones, preferencias y conexión IOL |
-| OWNER autenticado | Lo anterior y operaciones de configuración global expresamente enumeradas, como registrar el webhook del bot |
-| Proceso de sistema | Cron/webhook con autenticación propia y permisos específicos; sin impersonar un usuario |
+| Signed-out visitor | Home, Markets, instruments, Learn, and Glossary; their APIs expose public data only |
+| Authenticated USER | Public and private sections; only their own watchlists, positions, alerts, notifications, preferences, and IOL connection |
+| Authenticated OWNER | The above plus explicitly enumerated global configuration operations, such as registering the bot webhook |
+| System process | Cron/webhook with its own authentication and specific permissions; does not impersonate a user |
 
-OWNER no habilita leer carteras de otras personas. El rol inicial se asigna mediante un procedimiento operativo explícito a una identidad verificada; ningún registro público recibe OWNER por ser el primero.
+OWNER does not grant access to other people's portfolios. The initial role is assigned to a verified identity through an explicit operational procedure; no public signup receives OWNER by being first.
 
-## 2. Evidencias y límites del diagnóstico
+## 2. Diagnostic evidence and limits
 
-Se revisaron `AGENTS.md`, `package.json`, esquema y migraciones Prisma, sesión, queries/actions, integración IOL, navegación y Telegram. La versión instalada declarada es Next.js 16.3.8 y Prisma 7.10.0. Se consultaron las guías locales de Next:
+The review covered `AGENTS.md`, `package.json`, the Prisma schema and migrations, sessions, queries/actions, IOL integration, navigation, and Telegram. The declared installed versions are Next.js 16.3.8 and Prisma 7.10.0. The local Next.js guides consulted were:
 
 - `node_modules/next/dist/docs/01-app/02-guides/authentication.md`.
 - `node_modules/next/dist/docs/01-app/02-guides/data-security.md`.
@@ -29,228 +29,221 @@ Se revisaron `AGENTS.md`, `package.json`, esquema y migraciones Prisma, sesión,
 - `node_modules/next/dist/docs/01-app/01-getting-started/08-caching.md`.
 - `node_modules/next/dist/docs/01-app/02-guides/authentication-with-cache-components.md`.
 
-Hallazgos:
+Findings:
 
-1. `src/app/(app)/portfolio/page.tsx` activa un fallback global cuando no hay conexión OAuth y existen credenciales de entorno. Ese camino consulta cartera y efectivo sin exigir una sesión Mirador.
-2. `src/lib/market/iol.ts` implementa password grant y guarda tokens globales en memoria; `src/lib/market/index.ts` también usa ese adaptador para mercado público.
-3. `User` representa actualmente una identidad anónima de navegador. `getOrCreateIdentity()` crea usuarios al conectar IOL; no hay login propio. Su limpieza borra identidades sin conexión ni sesión vigente.
-4. `Watchlist`, `Position`, `Alert`, `Notification` y `Setting` no tienen propietario. Queries y mutaciones operan globalmente, incluso borrados por instrumento y marcado de notificaciones.
-5. El layout compartido, Inicio e Investigación consumen datos privados. Proteger solo las URLs privadas dejaría otras vías de exposición.
-6. Telegram tiene preferencias singleton y código de vinculación global; el evaluador reúne todas las alertas y envía al mismo chat.
-7. `disconnectIol()` elimina el usuario, sus sesiones y su conexión. Eso sería destructivo para una cuenta Mirador real.
-8. Ya existen PKCE, estado OAuth de un uso, tokens cifrados, conexión por `userId` y allowlist MCP de lectura. Esas garantías deben conservarse.
-9. La protección Basic local aparece en archivos sin seguimiento. No equivale a identidad individual y no constituye evidencia de protección desplegada.
-10. El coordinador reporta respuestas 200 sin cookies en las rutas privadas de producción y una descripción de cartera IOL conectada. No se consultaron carteras desde este análisis.
+1. `src/app/(app)/portfolio/page.tsx` enables a global fallback when there is no OAuth connection but environment credentials exist. This path queries holdings and cash without requiring a Mirador session.
+2. `src/lib/market/iol.ts` implements password grant and stores global tokens in memory; `src/lib/market/index.ts` also uses that adapter for public market data.
+3. `User` currently represents an anonymous browser identity. `getOrCreateIdentity()` creates users when connecting IOL; there is no first-party sign-in. Cleanup deletes identities without a connection or current session.
+4. `Watchlist`, `Position`, `Alert`, `Notification`, and `Setting` have no owner. Queries and mutations operate globally, including deletes by instrument and notification reads.
+5. The shared layout, Home, and Research consume private data. Protecting only private URLs would leave other exposure paths.
+6. Telegram has singleton preferences and a global linking code; the evaluator collects all alerts and sends them to the same chat.
+7. `disconnectIol()` deletes the user, their sessions, and their connection. That would be destructive for a real Mirador account.
+8. PKCE, single-use OAuth state, encrypted tokens, connections keyed by `userId`, and a read-only MCP allowlist already exist. Preserve these guarantees.
+9. Local Basic protection appears in untracked files. It is not individual identity and is not evidence of deployed protection.
+10. The coordinator reports HTTP 200 responses without cookies on production private routes and a description of a connected IOL portfolio. No portfolios were queried during this analysis.
 
-No está demostrada la causa de la diferencia entre aproximadamente 25 M mostrados y aproximadamente 10 M esperados. Hay dos fuentes de riesgo a investigar: el efectivo legacy podría contener patrimonio total, y el mapeo MCP suma `t0..t3` suponiendo plazos no acumulativos. Esa suposición aparece también en un test; el test no prueba el contrato del proveedor.
+The cause of the discrepancy between approximately 25 million shown and approximately 10 million expected has not been established. Two risks need investigation: legacy cash may contain total net worth, and the MCP mapping adds `t0..t3` assuming the terms are non-cumulative. A test repeats this assumption; it does not prove the provider's contract.
 
-## 3. P0: contención de la exposición
+## 3. P0: contain the exposure
 
-Ejecutar antes de habilitar nuevas cuentas:
+Complete before enabling new accounts:
 
-1. Identificar el proyecto, equipo, dominio y repositorio efectivos de producción mediante configuración y metadatos. Hay una discrepancia reportada entre remoto `track-inversiones` y builds `mirador-inversiones`. No desplegar suponiendo que son el mismo destino.
-2. Cortar el acceso global a IOL: retirar el fallback del portafolio y el proveedor password grant del selector de mercado. Al faltar OAuth del usuario, mostrar sus posiciones manuales y la opción de conectar IOL.
-3. Mientras no exista autenticación y ownership completos, cerrar lecturas/mutaciones privadas desde el servidor, incluida personalización de Inicio/layout, acciones y rutas indirectas. Puede responder mantenimiento temporal 503 para el área privada. Mantener públicos los módulos de mercado y aprendizaje.
-4. Desactivar temporalmente envíos de alertas globales y vinculación Telegram global si no pueden migrarse en el mismo corte. El refresh público de fundamentales puede seguir con autenticación de sistema.
-5. Eliminar `IOL_USERNAME` y `IOL_PASSWORD` de archivos locales de entorno y variantes que existan, `.env.example`, documentación, Docker/Compose y variables Vercel Development, Preview y Production, incluidas variantes por rama. Inspeccionar nombres/alcances y confirmar ausencia sin mostrar valores.
-6. Construir y desplegar el código de contención al destino verificado; confirmar dominio productivo y URLs de despliegues anteriores que sigan siendo accesibles. Quitar variables no cambia builds antiguos ni garantiza que tokens globales en procesos existentes desaparezcan.
-7. Revocar el acceso legacy del bróker mediante los controles disponibles y la participación del titular cuando sea necesaria; no imprimir tokens ni entrar a la cuenta usando credenciales almacenadas. Registrar como pendiente cualquier revocación que requiera acción humana.
+1. Identify the effective production project, team, domain, and repository from configuration and metadata. A discrepancy was reported between the `track-inversions` remote and `mirador-inversiones` builds. Do not deploy on the assumption that they are the same target.
+2. Cut off global IOL access: remove the portfolio fallback and password-grant provider from the market selector. When user OAuth is unavailable, show that user's manual positions and the option to connect IOL.
+3. Until authentication and ownership are complete, block private reads and mutations on the server, including Home/layout personalization, actions, and indirect routes. The private area may temporarily return 503 maintenance responses. Keep public market and learning modules available.
+4. Temporarily disable global alert delivery and global Telegram linking if they cannot be migrated in the same cutover. Public fundamentals refresh may continue with system authentication.
+5. Remove `IOL_USERNAME` and `IOL_PASSWORD` from local environment files and any variants, `.env.example`, documentation, Docker/Compose, and Vercel Development, Preview, and Production variables, including branch-specific variants. Inspect names/scopes and confirm absence without displaying values.
+6. Build and deploy the containment code to the verified target; confirm the production domain and any older deployment URLs that remain accessible. Removing variables does not change old builds or guarantee that global tokens disappear from existing processes.
+7. Revoke legacy broker access using available controls and involve the account owner where needed; do not print tokens or sign in with stored credentials. Track any revocation that requires human action as pending.
 
-No eliminar `IOL_SESSION_SECRET` ni el callback OAuth por similitud de nombres. No activar un fallback alternativo con credenciales globales. No hacer rollback hacia una versión que vuelva a exponer la cartera.
+Do not remove `IOL_SESSION_SECRET` or the OAuth callback based on similar names. Do not enable an alternative fallback with global credentials. Do not roll back to a version that exposes the portfolio again.
 
-Criterio de salida P0: un visitante puede ver mercado público, pero no recibe datos financieros privados ni puede ejecutar mutaciones privadas; ninguna ruta usa password grant IOL.
+P0 exit criterion: a visitor can view public markets but receives no private financial data and cannot perform private mutations; no route uses IOL password grant.
 
-## 4. P1: login Google, lista de acceso y contrato de sesión
+## 4. P1: Google sign-in, allowlist, and session contract
 
-Método decidido: Google OIDC mediante una biblioteca mantenida compatible con Next 16 y Prisma 7. La implementación elegirá y verificará esa biblioteca; no habrá formulario de contraseña Mirador ni alta pública alternativa.
+Chosen method: Google OIDC through a maintained library compatible with Next 16 and Prisma 7. The implementation will select and verify the library; there will be no Mirador password form or alternative public signup.
 
-Lista de acceso exacta, evaluada exclusivamente en servidor:
+Exact server-side allowlist:
 
 - `fervon96@gmail.com`.
 - `nicovon24@gmail.com`.
 
-Controles OIDC: flujo de código con callback fijo registrado, scopes `openid email` y `profile` solo si se necesita. Validar state ligado al navegador y nonce ligado al intento; rechazar intentos vencidos o reutilizados. Verificar firma del ID token con claves oficiales, issuer Google permitido, audience del cliente configurado para ese entorno y expiración. Exigir `email_verified === true`. Usar `sub` como identificador estable de Google; el email no reemplaza esa identidad. Estos controles se basan en la [documentación oficial de Google OIDC](https://developers.google.com/identity/openid-connect/openid-connect).
+OIDC controls: authorization-code flow with a registered fixed callback; `openid email` scopes and `profile` only if needed. Validate state bound to the browser and nonce bound to the attempt; reject expired or reused attempts. Verify the ID token signature using official keys, the permitted Google issuer, the client audience configured for that environment, and expiration. Require `email_verified === true`. Use `sub` as Google's stable identifier; email does not replace that identity. These controls follow the [official Google OIDC documentation](https://developers.google.com/identity/openid-connect/openid-connect).
 
-Política Mirador: después de validar OIDC, comparar el correo verificado normalizado a minúsculas con los dos valores completos. No ampliar la lista quitando puntos, eliminando sufijos `+`, aceptando dominios completos ni usando `login_hint` como autorización. Un correo escrito en formulario, query, header o localStorage no acredita acceso. La comprobación sucede antes de persistir una cuenta o crear una sesión; confirmar que los hooks de la biblioteca respeten ese orden.
+Mirador policy: after validating OIDC, compare the verified email, normalized to lowercase, against the two complete values. Do not expand the list by removing dots, stripping `+` suffixes, accepting whole domains, or using `login_hint` for authorization. An email typed into a form, query, header, or localStorage does not prove access. Check authorization before persisting an account or creating a session; verify that the library's hooks preserve this order.
 
-Primer login autorizado: crear atómicamente una cuenta Mirador con vínculo Google único por proveedor y `sub`, rol USER y datos privados vacíos. Login posterior: recuperar esa misma cuenta por vínculo Google y volver a comprobar correo autorizado y estado habilitado. Los dos sujetos Google conservan IDs, sesiones y datos independientes. No enlazar automáticamente por email con identidades legacy ni con una cuenta que tenga otro `sub`.
+First authorized sign-in: atomically create a Mirador account with a unique Google provider and `sub` link, USER role, and empty private data. Later sign-ins: retrieve the same account through its Google link and recheck that the email remains authorized and the account enabled. The two Google subjects keep independent IDs, sessions, and data. Do not automatically link by email to legacy identities or to an account with a different `sub`.
 
-Correo no autorizado, ausente o no verificado: denegar alta y sesión, limpiar el intento OIDC y mostrar “Esta cuenta no tiene acceso a Mirador”, con opción de elegir otra cuenta Google o volver a Inicio. No mostrar la lista de correos autorizados en el error. Un intento fallido no puede quedar presentado como un cambio exitoso de cuenta; cualquier sesión previa válida conserva su identidad original hasta logout o un nuevo login autorizado.
+Unauthorized, missing, or unverified email: deny signup and session creation, clear the OIDC attempt, and show “This account does not have access to Mirador,” with an option to choose another Google account or return Home. Do not reveal the allowlist in the error. A failed attempt must not appear to have successfully switched accounts; any prior valid session retains its original identity until logout or a new authorized sign-in.
 
-La lista se revalida también al resolver la sesión Mirador: retirar un correo de la configuración debe bloquear sus sesiones existentes, sin depender de que vuelva a Google. Configuración ausente o inválida cierra el acceso privado. El registro de usuarios de prueba en Google, si aplica a la configuración de consentimiento, complementa esta política; no sustituye su control en el servidor Mirador.
+Recheck the allowlist when resolving a Mirador session as well: removing an email from configuration must block its existing sessions without waiting for another Google sign-in. Missing or invalid configuration fails closed. Google test-user registration, if required by consent-screen settings, supplements this policy; it does not replace enforcement by the Mirador server.
 
-Contrato de servidor a fijar antes de dividir tareas:
+Server contract to establish before splitting work:
 
-- `getCurrentUser(): Promise<{ id, role } | null>` valida sesión y estado de cuenta contra la base.
-- `requireUser()` devuelve el mismo DTO o un error de autenticación tipado.
-- `requireRole("OWNER")` exige sesión válida y rol confirmado en servidor.
-- Páginas traducen ausencia de sesión a `/login?returnTo=...`; APIs a 401 y acciones a un resultado tipado. `returnTo` acepta solo rutas locales autorizadas.
-- No exponer helpers de acceso privado que acepten un `userId` suministrado por el cliente. El actor se obtiene de la sesión en cada punto de entrada.
+- `getCurrentUser(): Promise<{ id, role } | null>` validates the session and account status against the database.
+- `requireUser()` returns the same DTO or a typed authentication error.
+- `requireRole("OWNER")` requires a valid session and a role confirmed on the server.
+- Pages translate a missing session to `/login?returnTo=...`; APIs return 401 and actions return a typed result. `returnTo` accepts only approved local paths.
+- Do not expose private-access helpers that accept a client-supplied `userId`. Each entry point obtains the actor from the session.
 
-Modelo de cuenta: identificador interno estable, vínculo Google único por proveedor y `sub`, email verificado normalizado, rol USER por defecto, estado de cuenta y campos que requiera la biblioteca elegida. OWNER requiere designación explícita y autenticación verificada; ninguno de los dos correos obtiene ese rol automáticamente.
+Account model: stable internal ID, unique Google provider and `sub` link, normalized verified email, USER role by default, account status, and any fields required by the selected library. OWNER requires explicit designation and verified authentication; neither email receives that role automatically.
 
-Mantener sesiones opacas y revocables en servidor. Puede conservarse la propiedad actual de almacenar el hash del token de sesión. Cookies HttpOnly, Secure en producción, SameSite adecuado y expiración explícita. Rotar sesión al autenticar y cambiar privilegios; revocar al cerrar sesión o inhabilitar la cuenta. Una conexión IOL puede vencer sin cerrar la sesión Mirador. El ID token de Google no sustituye la sesión Mirador ni concede acceso a IOL; no persistir tokens Google para acceso offline que la aplicación no necesita.
+Keep server-side opaque, revocable sessions. The existing approach of storing a session-token hash may be retained. Cookies are HttpOnly, Secure in production, use an appropriate SameSite setting, and have explicit expiration. Rotate sessions at authentication and privilege changes; revoke them at logout or account disablement. An IOL connection may expire without ending the Mirador session. Google's ID token does not replace the Mirador session or grant IOL access; do not persist Google tokens for offline access the application does not need.
 
-Eliminar la creación automática de identidad al conectar IOL y la limpieza que borra usuarios por falta de IOL. Invalidar sesiones anónimas existentes mediante una versión/nombre nuevo o un marcador de autenticación; la presencia de la cookie antigua nunca prueba login propio.
+Remove automatic identity creation when connecting IOL and cleanup that deletes users for lack of IOL. Invalidate existing anonymous sessions with a new version/name or an authentication marker; an old cookie never proves first-party sign-in.
 
-Aplicar protección CSRF/origen en mutaciones según biblioteca y Next, validación Zod, mensajes de error que no enumeren cuentas y límites de intentos con almacenamiento apto para múltiples instancias. No usar exclusivamente memoria de un proceso para el límite de login de producción.
+Apply CSRF/origin protection to mutations according to the library and Next.js, validate with Zod, avoid account-enumerating errors, and rate-limit attempts with storage suitable for multiple instances. Do not rely only on one process's memory for production login rate limits.
 
-Configuración propuesta de autenticación, con nombres finales adaptados a la biblioteca:
+Proposed authentication configuration; adapt final names to the selected library:
 
-| Variable/elemento | Política |
+| Variable/element | Policy |
 | --- | --- |
-| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Cliente Google por entorno; secreto solo servidor |
-| `AUTH_SECRET` | Secreto propio de autenticación, independiente del cifrado IOL |
-| `APP_ORIGIN` y callback Google | Origen fijo y callback exacto de la biblioteca; nunca derivados de un Host arbitrario |
-| `AUTH_ALLOWED_EMAILS` | Exactamente `fervon96@gmail.com,nicovon24@gmail.com`; validación servidor y denegación si falta o está mal configurada |
-| Development | Cliente/callback localhost explícitos, base y secreto propios; misma lista de acceso |
-| Preview | Cliente y base aislados, dominio de preview estable con callback exacto; si no hay callback configurado, login deshabilitado |
-| Production | Cliente/callback HTTPS del dominio productivo confirmado, base y secreto productivos; misma lista de acceso |
+| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Separate Google client per environment; secret stays server-side |
+| `AUTH_SECRET` | Dedicated authentication secret, separate from IOL encryption |
+| `APP_ORIGIN` and Google callback | Fixed origin and exact library callback; never derive them from an arbitrary Host header |
+| `AUTH_ALLOWED_EMAILS` | Exactly `fervon96@gmail.com,nicovon24@gmail.com`; validate server-side and deny access if missing or malformed |
+| Development | Explicit localhost client/callback, dedicated database and secret; same allowlist |
+| Preview | Isolated client and database, stable preview domain with exact callback; sign-in disabled if no callback is configured |
+| Production | Confirmed production HTTPS client/callback, production database and secret; same allowlist |
 
-No compartir cookies de autenticación entre hosts/entornos ni usar la base productiva para pruebas de login. Las pruebas automatizadas usan OIDC simulado sin ampliar la lista de acceso desplegada. La configuración OAuth Google permanece separada de `IOL_SESSION_SECRET` y del callback IOL.
+Do not share authentication cookies across hosts/environments or use the production database for sign-in tests. Automated tests use mocked OIDC without expanding the deployed allowlist. Google OAuth configuration remains separate from `IOL_SESSION_SECRET` and the IOL callback.
 
-## 5. P1: migración de propietarios sin apropiación de datos
+## 5. P1: migrate ownership without taking over data
 
-Crear nuevas migraciones; no modificar ni revertir la migración aplicada `20261008003757_iol_login_only`, que quitó campos de cuenta.
+Create new migrations; do not modify or revert the applied `20261008003757_iol_login_only` migration, which removed account fields.
 
-1. Realizar respaldo y obtener conteos por tabla, sin volcar información financiera a logs. Ensayar migración en copia aislada.
-2. Añadir `ownerId` nullable e índices a Watchlist, Position, Alert y Notification. Setting deja de ser singleton y tiene un registro único por usuario. WatchlistItem puede heredar ownership de su lista, siempre que todas las operaciones verifiquen esa relación.
-3. Añadir identidad real y rol sin promover usuarios anónimos. Los registros antiguos sin propietario quedan en cuarentena lógica: `ownerId = null`, inaccesibles a consultas de usuario y excluidos de cron/envíos.
-4. Todas las creaciones posteriores exigen ownerId calculado en servidor. Todas las lecturas y mutaciones privadas filtran ese ownerId. Nunca incluir filas sin propietario como “datos por defecto”.
-5. No asignar los datos previos al primer signup, al primer OWNER, al primer usuario que conecta IOL ni al navegador que posee una cookie antigua.
-6. Ofrecer migración operativa explícita después de confirmar quién es titular de cada conjunto. Ejecutar un mapeo aprobado de registros a usuario real, con conteos antes/después y transacción. Las filas sin prueba de pertenencia permanecen aisladas.
-7. Para conexiones IOL anónimas previas, opción preferida: exigir nueva autorización OAuth desde la cuenta Mirador. Cualquier retención/retirada de tokens antiguos se documenta; no asociarlos por coincidencias inferidas.
-8. Cuando todos los datos activos tengan dueño, archivar o resolver filas restantes y endurecer constraints. Si se retiene cuarentena nullable durante la transición, añadir pruebas que impidan devolverla; la fase de constraints no debe causar pérdida silenciosa.
+1. Take a backup and record per-table counts without writing financial data to logs. Test the migration on an isolated copy.
+2. Add nullable `ownerId` columns and indexes to Watchlist, Position, Alert, and Notification. Replace singleton Setting with one unique record per user. WatchlistItem may inherit ownership from its list, provided every operation validates that relationship.
+3. Add real identity and role without promoting anonymous users. Old records without an owner remain in logical quarantine: `ownerId = null`, inaccessible to user queries and excluded from cron and delivery.
+4. All future creates require an `ownerId` calculated on the server. All private reads and mutations filter by that `ownerId`. Never include ownerless rows as “default data.”
+5. Do not assign previous data to the first signup, first OWNER, first user connecting IOL, or browser with an old cookie.
+6. Offer an explicit operational migration after confirming the owner of each dataset. Run an approved record-to-user mapping with before/after counts and a transaction. Rows without proof of ownership remain isolated.
+7. For existing anonymous IOL connections, the preferred option is to require new OAuth authorization from the Mirador account. Document any retention/removal of old tokens; do not associate them based on inferred matches.
+8. Once all active data has an owner, archive or resolve remaining rows and tighten constraints. If nullable quarantined rows are retained during transition, add tests preventing their return; the constraint phase must not cause silent data loss.
 
-Notification conserva su propietario aun si se elimina la alerta. Las notificaciones creadas desde una alerta deben tomar su ownerId y no admitir otro distinto. Los datos compartidos del catálogo Instrument y Fundamentals siguen siendo públicos; un usuario no debe poder sobrescribir libremente metadatos globales mediante el nombre de un favorito.
+Notifications retain their owner if an alert is deleted. Notifications created from an alert inherit that alert's `ownerId` and cannot accept a different one. Shared Instrument and Fundamentals catalog data remains public; users must not be able to freely overwrite global metadata through a favorite's name.
 
-Modificar seed para sembrar catálogo público y, si corresponde, datos de ejemplo asociados a un usuario de prueba explícito en entorno no productivo. Eliminar la creación implícita de listas y Setting singleton.
+Update seed data to populate the public catalog and, if needed, sample data associated with an explicit test user in non-production environments. Remove implicit creation of watchlists and singleton Setting.
 
-## 6. P1: autorización en datos, acciones, páginas y caché
+## 6. P1: authorization for data, actions, pages, and caches
 
-- Centralizar acceso privado en DAL `server-only`. Cada query o action valida actor antes de consultar o modificar. `proxy.ts` es una ayuda para redirección temprana, no la autoridad final.
-- Añadir controles de página en Investigación, Portafolio, Favoritos, Alertas y Ajustes. El layout no basta: Next tiene acciones, RSC, navegación y entradas directas independientes.
-- Inicio/layout usan DTO público para visitantes. Solo buscan listas, contadores o notificaciones cuando hay usuario autenticado, y esas queries filtran al usuario.
-- Para update/delete exigir simultáneamente id y ownerId; para WatchlistItem verificar propietario de la lista. Ausencia y registro de otro usuario deben producir el mismo resultado público.
-- `removeFromWatchlist` sin lista específica elimina únicamente de listas del actor. `markNotificationsRead` modifica únicamente sus notificaciones. La lista por defecto y su orden se calculan dentro del usuario.
-- Separar ausencia de sesión, falta de autorización y error de infraestructura. Los wrappers actuales que convierten todos los fallos en datos vacíos no deben ocultar fallas de autorización o mutaciones fallidas.
-- El refresh de Investigación se autoriza y limita por usuario; cualquier proceso cron usa una función interna explícita de sistema, sin llamar accidentalmente a una query de sesión que no existe en background.
-- Datos privados no entran en cachés públicas o claves globales. En primera entrega usar consultas privadas sin caché compartida y HTTP `private, no-store` donde aplique. `React.cache` puede deduplicar dentro del render; no equivale a una caché global.
-- Si luego se introduce caché persistente por usuario, verificar autorización antes del acceso, incluir ownerId en claves/tags y definir invalidación por usuario. No cachear tokens ni DTO financieros dentro del shell público.
-- Vaciar consultas y estado privado del navegador al salir/cambiar cuenta; separar claves de almacenamiento de costo promedio por usuario autenticado y retirar la clave `legacy`. No importar automáticamente datos de localStorage previo.
+- Centralize private access in a `server-only` DAL. Each query or action validates the actor before reading or modifying data. `proxy.ts` helps with early redirects; it is not the final authority.
+- Add page-level controls to Research, Portfolio, Watchlists, Alerts, and Settings. The layout alone is insufficient: Next.js has independent actions, RSC, navigation, and direct entry points.
+- Home/layout use a public DTO for visitors. Query watchlists, counts, or notifications only when there is an authenticated user, and scope those queries to that user.
+- For update/delete, require both ID and `ownerId`; for WatchlistItem, verify the list owner. A missing record and another user's record must produce the same public result.
+- `removeFromWatchlist` without a specific list removes only from the actor's lists. `markNotificationsRead` updates only that actor's notifications. Calculate the default list and its order within the user's scope.
+- Distinguish missing session, authorization failure, and infrastructure error. Existing wrappers that convert every failure into empty data must not hide authorization failures or failed mutations.
+- Authorize and rate-limit Research refresh per user; cron uses an explicit internal system function and must not accidentally call a session query when running in the background.
+- Private data must not enter public caches or global cache keys. Initially, use private queries without shared caching and HTTP `private, no-store` where applicable. `React.cache` may deduplicate within a render; it is not a global cache.
+- If persistent per-user caching is later introduced, authorize before access, include `ownerId` in keys/tags, and define per-user invalidation. Do not cache tokens or financial DTOs in the public shell.
+- Clear private browser queries and state on logout/account switch; scope average-cost storage keys to the authenticated user and remove the `legacy` key. Do not automatically import prior localStorage data.
 
-`next.config.ts` no activa actualmente Cache Components. No introducir esa migración como parte de seguridad. Si cambia esa configuración, aplicar las guías locales sobre cookies async, Suspense y caché privada antes de modificar renderizado.
+`next.config.ts` does not currently enable Cache Components. Do not introduce that migration as part of security work. If that configuration changes, consult the local guides on async cookies, Suspense, and private caching before changing rendering.
 
-## 7. P1: IOL opcional y eliminación completa de legacy
+## 7. P1: optional IOL and complete removal of legacy behavior
 
-`connectIol` exige `requireUser()` antes de crear la autorización pendiente. El callback comprueba sesión Mirador válida, mismo userId, state/cookie, expiración y consumo único. Cambio de cuenta o logout entre inicio y callback cancela el flujo.
+`connectIol` requires `requireUser()` before creating a pending authorization. The callback checks a valid Mirador session, matching `userId`, state/cookie, expiration, and single use. An account switch or logout between initiation and callback cancels the flow.
 
-`disconnectIol` elimina únicamente la conexión y autorizaciones pendientes del usuario y, donde el proveedor lo soporte, revoca tokens. Conserva cuenta Mirador, sesión, listas y posiciones. Logout revoca la sesión Mirador y limpia estado local; la retención de conexión OAuth se define explícitamente y no implica poder consultarla sin login.
+`disconnectIol` removes only that user's connection and pending authorizations and revokes tokens where the provider supports it. It preserves the Mirador account, session, watchlists, and positions. Logout revokes the Mirador session and clears local state; OAuth connection retention must be explicitly defined and never allows queries without login.
 
-Mantener cifrado de access/refresh tokens, PKCE, locks de renovación y allowlist de lectura. Tokens, verificadores y códigos nunca aparecen en props, RSC, navegador ni logs. Todas las llamadas privadas obtienen el userId de la sesión validada. Ningún fallback carga otra cuenta si falla OAuth.
+Keep access/refresh token encryption, PKCE, refresh locks, and the read-only allowlist. Tokens, verifiers, and codes never appear in props, RSC, browser, or logs. Every private call obtains its `userId` from the validated session. No fallback loads another account if OAuth fails.
 
-Extraer `BrokerHolding`/`BrokerCash` a un módulo neutro de tipos antes de retirar `src/lib/market/iol.ts`. Quitar sus imports y selección en `src/lib/market/index.ts`, consultas legacy, estado global de tokens, variables, textos de ajustes/footer, ejemplos y documentación. Las cotizaciones públicas usan los proveedores públicos existentes; validar que panel, histórico, búsqueda e instrumentos sigan funcionando.
+Extract `BrokerHolding`/`BrokerCash` into a neutral types module before removing `src/lib/market/iol.ts`. Remove its imports and selection from `src/lib/market/index.ts`, legacy queries, global token state, variables, Settings/footer copy, examples, and documentation. Public quotes use the existing public providers; verify that panels, history, search, and instruments still work.
 
-Separar configuración:
+Separate configuration:
 
-- Development: base, secreto de cifrado y callback local propios.
-- Preview: base y secreto aislados; callback permitido explícito o integración IOL deshabilitada.
-- Production: base, secreto y origen/callback productivos; ningún secreto del bróker en variables `NEXT_PUBLIC_*`.
-- Secretos de autenticación, cifrado IOL, cron y webhook tienen propósitos distintos. No reutilizar ni rotar el secreto de cifrado IOL sin un plan para tokens ya cifrados.
-- `.env.example` solo contiene nombres y valores de ejemplo; inventario final de variables por nombre/entorno, nunca valores.
+- Development: dedicated database, encryption secret, and local callback.
+- Preview: isolated database and secret; explicitly allowed callback or disabled IOL integration.
+- Production: production database, secret, origin, and callback; no broker secrets in `NEXT_PUBLIC_*` variables.
+- Authentication, IOL encryption, cron, and webhook secrets serve different purposes. Do not reuse or rotate the IOL encryption secret without a plan for already encrypted tokens.
+- `.env.example` contains names and example values only; the final variable inventory lists names by environment, never values.
 
-## 8. P1: Telegram y procesos de sistema
+## 8. P1: Telegram and system processes
 
-Sustituir código global por nonce aleatorio, hash almacenado, usuario asociado, expiración breve y consumo único. El webhook valida su secreto y vincula el chat únicamente al dueño del nonce; definir política para un chat ya asociado a otra cuenta. `/stop` desvincula el vínculo correspondiente a ese chat.
+Replace global codes with a random nonce, stored hash, associated user, short expiration, and single use. The webhook validates its secret and links a chat only to the nonce owner; define a policy for a chat already linked to another account. `/stop` removes the link for that chat.
 
-El evaluador puede recorrer alertas de todos los usuarios como proceso de sistema, pero crea notificaciones con ownerId de la alerta y agrupa envíos por propietario y su chat. Excluir datos en cuarentena y cuentas inhabilitadas. Mantener control de concurrencia para no duplicar disparos.
+The evaluator may process alerts for all users as a system process, but creates notifications with the alert's `ownerId` and groups deliveries by owner and their chat. Exclude quarantined data and disabled accounts. Keep concurrency controls to prevent duplicate triggers.
 
-Registro global del webhook queda para OWNER o configuración de despliegue. Vincular, desvincular y probar Telegram son operaciones individuales. La URL del webhook sale del origen configurado, no del Host recibido. Pruebas de integración usan transporte falso; no enviar mensajes reales durante implementación.
+Global webhook registration is reserved for OWNER or deployment configuration. Linking, unlinking, and testing Telegram are individual operations. Build the webhook URL from the configured origin, not the incoming Host header. Integration tests use a fake transport; do not send real messages during implementation.
 
-## 9. P2: reconciliación del total del portafolio
+## 9. P2: reconcile the portfolio total
 
-Desacoplar este trabajo de la contención; no alterar cifras para alcanzar aproximadamente 10 M.
+Keep this work separate from containment; do not change figures to reach approximately 10 million.
 
-1. Definir DTO que distinga tenencias, efectivo, patrimonio informado, moneda, país/cuenta, momento y estado parcial. “Total” y “disponible” no son intercambiables.
-2. Obtener documentación oficial del contrato y fixtures sanitizados autorizados. Confirmar si `totals` incluye títulos y si `t0..t3` son saldos acumulativos, independientes o vencimientos. No afirmar esa semántica a partir del nombre del campo.
-3. Reconstruir el total con componentes identificados: tenencias por moneda + efectivo confirmado + posiciones manuales explícitamente incluidas. El patrimonio informado por el bróker sirve de comparación y no se suma otra vez como efectivo.
-4. Revisar duplicados por país/cuenta, instrumentos manuales que representan las mismas tenencias, bonos por lote/nominal, moneda de cotización y conversión ARS/USD. Si hay duplicación manual, dar control explícito de inclusión; no borrar ni deduplicar posiciones por símbolo sin evidencia.
-5. Ante saldo de semántica desconocida o fallos parciales, mostrar subtotal de tenencias y estado incompleto; no presentar un total global exacto con cero inventado.
-6. Mostrar desglose, fuente, moneda y hora para comparar con IOL al mismo momento. Documentar fórmula y diferencias comprobadas. Pruebas con fixtures sustentan el contrato; reemplazar el test que solo reafirma la suma t0..t3 si el contrato indica otra cosa.
+1. Define a DTO that distinguishes holdings, cash, reported net worth, currency, country/account, timestamp, and partial status. “Total” and “available” are not interchangeable.
+2. Obtain official contract documentation and authorized sanitized fixtures. Confirm whether `totals` includes securities and whether `t0..t3` are cumulative balances, independent balances, or settlement dates. Do not infer semantics from field names.
+3. Reconstruct the total from identified components: holdings by currency + confirmed cash + explicitly included manual positions. Use broker-reported net worth for comparison; do not add it again as cash.
+4. Check duplicates across country/account, manual instruments representing the same holdings, bonds by lot/nominal value, quote currency, and ARS/USD conversion. If manual duplication exists, provide an explicit inclusion control; do not delete or deduplicate by symbol without evidence.
+5. If balance semantics are unknown or responses are partial, show a holdings subtotal and incomplete status; do not present an exact global total using an invented zero.
+6. Show breakdown, source, currency, and timestamp to compare with IOL at the same time. Document the formula and verified differences. Fixtures should establish the contract; replace any test that merely repeats the `t0..t3` sum if the contract says otherwise.
 
-## 10. Delegación por archivos y dependencias
+## 10. File ownership and dependency plan
 
-La implementación se delega después de identificar el orquestador Google que el usuario desea. GSD bajo `.gemini/antigravity` es un candidato hallado por el coordinador, no una confirmación de su elección. No iniciar otro orquestador por equivalencia supuesta.
+Implementation is delegated only after identifying the Google orchestrator the user wants. GSD under `.gemini/antigravity` is a candidate found by the coordinator, not confirmation of the user's choice. Do not start another orchestrator based on assumed equivalence.
 
-El coordinador conserva contrato transversal, secuencia de migración, configuración remota, `package.json`/lockfile y resolución de integración. Cada tarea recibe diff base y aceptación; ningún agente revierte modificaciones ajenas.
+The coordinator owns cross-cutting contracts, migration sequence, remote configuration, `package.json`/lockfile, and integration resolution. Each task receives the base diff and acceptance criteria; no agent reverts another contributor's changes.
 
-| Tarea | Archivos/responsabilidad exclusiva | Dependencia y aceptación |
+| Task | Exclusive files/responsibility | Dependency and acceptance |
 | --- | --- | --- |
-| A. Datos | `prisma/schema.prisma`, nuevas migraciones, seed y script de migración explícita | Fijar contrato primero; migración ensayada conserva registros y aísla los sin dueño |
-| B. Identidad | `src/server/auth/**`, nuevas páginas/componentes auth, rutas auth, pruebas de sesión | A y biblioteca elegida; Google OIDC, alta/login solo de los dos correos verificados, logout independiente de IOL, sesiones antiguas rechazadas |
-| C. Autorización y UI | `src/server/queries.ts`, `src/server/actions.ts`, `src/server/research-table.ts`, páginas `(app)`, shell, provider privado, botones favoritos, proxy y pruebas | A/B y DTO neutro de D; autorización e aislamiento A/B en cada entrada; portfolio page pertenece solo a C |
-| D. IOL y mercado | `src/server/iol/**`, callback IOL, `src/lib/market/iol.ts`, `src/lib/market/index.ts`, nuevo módulo neutro de tipos y pruebas IOL | B; sin password grant ni fallback; disconnect conserva cuenta y datos |
-| E. Telegram | `src/server/evaluate-alerts.ts`, `src/lib/telegram.ts`, rutas cron/webhook, componentes Telegram, nuevo servicio de vínculo y pruebas | A/B; C integra las acciones como wrappers a ese servicio; cero envíos cruzados |
-| F. Entornos y despliegue | `src/lib/env.ts`, `.env*` existentes, README, Docker/Compose, metadatos Vercel y despliegue | Coordinador; elimina solo credenciales legacy, conserva OAuth, destino verificado |
-| G. Valuación | `src/server/iol/portfolio.ts`, pruebas de mapeo, `src/lib/portfolio*.ts`, componentes de portafolio | Secuencial después de D/C para no compartir archivos activos; contrato de saldo comprobado |
-| H. Revisión independiente | Lectura del diff y pruebas de aceptación; informe sin editar archivos de otros | Después de integración; modelo distinto al implementador, foco en sesión/IDOR/caché/migración |
+| A. Data | `prisma/schema.prisma`, new migrations, seed, and explicit migration script | Establish contract first; rehearsed migration preserves records and isolates ownerless rows |
+| B. Identity | `src/server/auth/**`, new auth pages/components, auth routes, session tests | A and selected library; Google OIDC; signup/sign-in only for the two verified emails; logout independent of IOL; reject old sessions |
+| C. Authorization and UI | `src/server/queries.ts`, `src/server/actions.ts`, `src/server/research-table.ts`, `(app)` pages, shell, private provider, favorite buttons, proxy, and tests | A/B and D's neutral DTO; authorization and A/B isolation at every entry point; C owns the portfolio page |
+| D. IOL and market | `src/server/iol/**`, IOL callback, `src/lib/market/iol.ts`, `src/lib/market/index.ts`, neutral types module, and IOL tests | B; no password grant or fallback; disconnect preserves account and data |
+| E. Telegram | `src/server/evaluate-alerts.ts`, `src/lib/telegram.ts`, cron/webhook routes, Telegram components, new linking service, and tests | A/B; C wraps the service with actions; no cross-account deliveries |
+| F. Environments and deployment | `src/lib/env.ts`, existing `.env*`, README, Docker/Compose, Vercel metadata, and deployment | Coordinator; remove only legacy credentials, retain OAuth, verify target |
+| G. Valuation | `src/server/iol/portfolio.ts`, mapping tests, `src/lib/portfolio*.ts`, portfolio components | Sequential after D/C to avoid overlapping active files; verify balance contract |
+| H. Independent review | Read diff and acceptance tests; report without editing others' files | After integration; different model from implementer, focus on sessions/IDOR/cache/migrations |
 
-A/B necesitan serializar el contrato y cambios Prisma; C/D/E pueden avanzar después con archivos separados. G toma ownership de archivos de D/C solo cuando esas tareas terminan. F coordina cambios de entorno con todos, sin dejar un build que espere variables eliminadas. La selección de modelos más económicos queda en el orquestador elegido; la revisión de seguridad debe tener contexto nuevo.
+A/B must serialize the contract and Prisma changes; C/D/E can proceed afterward in separate files. G takes ownership of D/C files only when those tasks finish. F coordinates environment changes with everyone, without leaving a build that expects removed variables. The chosen orchestrator selects more economical models; the security review needs fresh context.
 
-## 11. Pruebas y aceptación antes de abrir el acceso privado
+## 11. Tests and acceptance before opening private access
 
-Usar dos usuarios ficticios A/B, un OWNER y filas antiguas en cuarentena. Transporte IOL/Telegram falso; ninguna operación de trading.
+Use two fictitious users A/B, one OWNER, and old quarantined rows. Use fake IOL/Telegram transports; no trading operations.
 
-- Visitante navega las cinco áreas públicas y sus APIs. Las cinco áreas privadas redirigen al login o rechazan acceso antes de consultar datos privados, también en RSC, prefetch y URLs profundas.
-- Una cuenta nueva sin IOL accede a sus pantallas privadas vacías y puede crear listas, posiciones y alertas.
-- Google permite únicamente los dos correos exactos verificados y crea dos cuentas separadas. Otro correo, `email_verified` falso/ausente, firma/issuer/audience inválidos, token expirado, state/nonce inválidos o replay no crean cuenta ni sesión.
-- El login repetido del mismo `sub` conserva su cuenta; el cambio entre las dos cuentas renueva sesión y limpia estado privado. Retirar un correo de la lista bloquea sus sesiones; configuración ausente falla cerrada.
-- Correo no autorizado recibe rechazo y opción de cambiar cuenta, sin descubrir la lista permitida. Ninguno de los dos usuarios recibe OWNER, datos legacy ni una conexión IOL automáticamente.
-- A no puede leer/modificar/borrar registros de B pasando ids ni mediante variantes de acciones sin id de lista. OWNER tampoco puede acceder a la cartera de B.
-- HTML, JSON, RSC, contador, notificaciones, Inicio, búsqueda personalizada y cachés no mezclan A/B. Logout/login B en el mismo navegador no muestra estado ni PPC de A.
-- Sesión ausente, caducada, revocada y anónima antigua se rechazan. Los errores de base no conceden acceso.
-- OAuth rechaza state repetido/expirado, callback sin sesión, cuenta distinta, returnTo externo y falta de cookie. Desconectar IOL conserva cuenta y posiciones. Herramientas fuera de allowlist no tocan la red.
-- Fixtures demuestran que los tokens quedan cifrados; inspección de respuestas/logs no encuentra secretos. No probar con credenciales reales.
-- Alertas y Telegram respetan ownerId, consumo de nonce y destinatario; cuarentena nunca envía.
-- Migración conserva conteos, no asigna propietario por orden de registro y se puede ensayar/restaurar. Se documenta compatibilidad del rollback.
-- Búsqueda de referencias activas elimina `IOL_USERNAME`, `IOL_PASSWORD`, password grant, `hasIol` legacy y cartera global. Las menciones históricas en este plan pueden permanecer; no constituyen configuración.
-- Ejecutar pruebas existentes relevantes, nuevas pruebas de autenticación/autorización/migración, lint y build. No dar por aprobado por compilar únicamente.
+- A visitor can navigate the five public areas and their APIs. The five private areas redirect to login or reject access before querying private data, including RSC, prefetch, and deep URLs.
+- A new account without IOL can access empty private screens and create watchlists, positions, and alerts.
+- Google allows only the two exact verified emails and creates separate accounts. A different email, false/missing `email_verified`, invalid signature/issuer/audience, expired token, invalid state/nonce, or replay creates no account or session.
+- Repeated sign-in with the same `sub` retains the account; switching between the two accounts renews the session and clears private state. Removing an email from the allowlist blocks its sessions; missing configuration fails closed.
+- Unauthorized email receives a rejection and option to switch accounts without revealing the allowlist. Neither user receives OWNER, legacy data, or an IOL connection automatically.
+- A cannot read, modify, or delete B's records by passing IDs or using action variants without a list ID. OWNER also cannot access B's portfolio.
+- HTML, JSON, RSC, counts, notifications, Home, personalized search, and caches never mix A/B. Logging out and signing in as B in the same browser does not show A's state or average cost basis.
+- Missing, expired, revoked, and old anonymous sessions are rejected. Database errors never grant access.
+- OAuth rejects repeated/expired state, callbacks without a session, a different account, external `returnTo`, and missing cookies. Disconnecting IOL preserves the account and positions. Tools outside the allowlist make no network requests.
+- Fixtures show that tokens are encrypted; response/log inspection finds no secrets. Do not test with real credentials.
+- Alerts and Telegram respect `ownerId`, nonce consumption, and recipient; quarantined data is never delivered.
+- Migration preserves counts, never assigns ownership by row order, and can be rehearsed/restored. Rollback compatibility is documented.
+- Active-reference search removes `IOL_USERNAME`, `IOL_PASSWORD`, password grant, legacy `hasIol`, and global portfolio access. Historical mentions in this plan may remain; they are not configuration.
+- Run relevant existing tests, new authentication/authorization/migration tests, lint, and build. A successful compile alone is not acceptance.
 
-Despliegue: contención primero; luego migraciones aditivas con área privada cerrada; build integrado en preview aislado; pruebas anónimo/A/B; despliegue al proyecto confirmado; verificación en dominio real; finalmente apertura de login y acceso privado. Evitar que una app vieja con queries globales conviva con nuevos datos multicuenta. Si falla una fase, conservar contención y corregir hacia adelante.
+Deployment sequence: containment first; additive migrations while the private area remains closed; integrated build in isolated preview; anonymous/A/B tests; deploy to the confirmed project; verify on the real domain; finally open sign-in and private access. Do not let an old app with global queries run alongside new multi-account data. If a phase fails, keep containment in place and fix forward.
 
-## 12. Ajustes de revisión independiente (Sol high)
+## 12. Independent review adjustments (Sol high)
 
-Estos requisitos complementan el plan y deben entrar en los criterios de aceptación:
+These requirements supplement the plan and must be included in acceptance criteria:
 
-- `completeAuthorization` debe rechazar `sessionUserId === null` dentro del servicio, antes de consumir el flujo o canjear el código. No basta con exigir sesión en el Route Handler. Probar directamente el servicio con sesión ausente y con usuario diferente.
-- Preservar la fila `Setting` singleton existente en cuarentena o en una copia de migración. No asignar implícitamente su `telegramChatId`, preferencias o códigos de vinculación a una cuenta nueva. Requerir atribución verificada de preferencias y nueva vinculación Telegram.
-- El esquema debe distinguir inequívocamente identidades anónimas legacy de cuentas Mirador autenticables. `getCurrentUser` debe rechazar identidades legacy aunque exista una cookie o sesión anterior. Retirar la limpieza de `getOrCreateIdentity` antes de crear cuentas reales.
-- El corte P0 debe estar activo en el proyecto productivo confirmado antes de abrir altas o introducir datos multicuenta. Verificar también los despliegues antiguos accesibles y cerrar su acceso antes de que puedan consultar los datos nuevos.
-- La tarea C es dueña de `src/app/(app)/settings/page.tsx`, `src/app/(app)/alerts/page.tsx` y todos los wrappers de `src/server/actions.ts`. La tarea E es dueña del servicio nuevo de vinculación Telegram, del transporte y de los componentes específicos de Telegram que se inventariarán antes de despachar E. C integra sus imports; E no edita esas páginas ni los wrappers.
+- `completeAuthorization` must reject `sessionUserId === null` inside the service, before consuming the flow or exchanging the code. Requiring a session only in the Route Handler is insufficient. Test the service directly with a missing session and with a different user.
+- Preserve the existing singleton `Setting` row in quarantine or in a migration copy. Do not implicitly assign its `telegramChatId`, preferences, or linking codes to a new account. Require verified attribution of preferences and fresh Telegram linking.
+- The schema must unambiguously distinguish legacy anonymous identities from authenticatable Mirador accounts. `getCurrentUser` must reject legacy identities even if an old cookie or session exists. Remove cleanup from `getOrCreateIdentity` before creating real accounts.
+- P0 containment must be active on the confirmed production project before opening signups or introducing multi-account data. Also verify accessible old deployments and close their access before they can query new data.
+- Task C owns `src/app/(app)/settings/page.tsx`, `src/app/(app)/alerts/page.tsx`, and all wrappers in `src/server/actions.ts`. Task E owns the new Telegram linking service, transport, and Telegram-specific components, which must be inventoried before dispatching E. C integrates its imports; E does not edit those pages or wrappers.
 
-Plan redactado por Astra high y revisado por Sol high. Esta revisión no constituye implementación ni validación de seguridad del despliegue actual.
+Plan written by Astra high and reviewed by Sol high. This review is not implementation or a security validation of the current deployment.
 
-## 13. Decisiones pendientes mínimas
+## 13. Minimum pending decisions
 
-1. Confirmar orquestador Google y modelos disponibles para implementar/revisar; este plan no lo ejecuta.
-2. Confirmar identidad que recibirá OWNER y pertenencia de registros antiguos antes de cualquier asignación. Hasta entonces quedan aislados; ambos usuarios nuevos tienen rol USER.
-3. Preparar clientes/callbacks Google por entorno. El proyecto Vercel `mirador-inversiones` quedó confirmado; GitHub redirige el remoto local `track-inversiones` al mismo repositorio y `main` coincidía con `c49e5ca` antes de publicar este corte.
-4. Para cerrar la diferencia del total, disponer del contrato IOL y evidencia sanitizada autorizada; mientras falten, no declarar una causa ni una cifra corregida.
+1. Confirm the Google orchestrator and models available for implementation/review; this plan does not execute them.
+2. Confirm the identity that will receive OWNER and ownership of old records before any assignment. Until then, those records remain isolated; both new users have the USER role.
+3. Prepare Google clients/callbacks per environment. The Vercel `mirador-inversiones` project was confirmed; GitHub redirects the local `track-inversions` remote to the same repository, and `main` matched `c49e5ca` before this cutover was published.
+4. To resolve the portfolio-total discrepancy, obtain the IOL contract and authorized sanitized evidence; until then, do not state a cause or corrected figure.
 
-El usuario autorizó la implementación. La ejecución y sus pendientes se registran a continuación.
+The user authorized implementation. Execution and remaining items are recorded below.
 
-## 14. Estado de ejecución (2026-10-20)
+## 14. Execution status (2026-10-20)
 
-- Implementados login Google OIDC para los dos correos acordados, sesiones Mirador revocables, separación por `ownerId` en consultas y acciones, conexión IOL por usuario sin password grant, Telegram por usuario y migración aditiva. Los registros viejos permanecen sin propietario.
-- Eliminadas `IOL_USERNAME`, `IOL_PASSWORD`, `APP_ACCESS_USER` y `APP_ACCESS_PASSWORD` de la configuración local y de Vercel; la lista de variables de los entornos se verificó sin mostrar valores.
-- Se desplegó el corte de seguridad directo al proyecto Vercel `mirador-inversiones`, despliegue `dpl_9paJ7CZADdf9fiNbTVh7prAF8aUi`. El dominio productivo respondió 200 para las áreas públicas y 307 hacia `/login` para las cinco privadas sin sesión; la URL de despliegue anterior probada respondió 302 de protección.
-- Prisma aplicó las cinco migraciones correctamente a una base Docker aislada, luego eliminada. TypeScript, build y 140 pruebas pasaron; una prueba con sesiones ficticias A/B confirmó que cada uno ve solo su lista y que la fila legacy no aparece.
-- La revisión automática rechazó exportar un respaldo completo de Neon a un archivo local por posible contenido personal y tokens. No se ejecutó esa exportación ni la nueva migración en producción; se solicitó autorización específica para el respaldo.
-- El login productivo permanece cerrado porque faltan `GOOGLE_CLIENT_ID` y `GOOGLE_CLIENT_SECRET` en Vercel. `MIRADOR_APP_URL` ya se cargó en Production y entrará en vigor con el próximo despliegue. La atribución de datos antiguos y el rol OWNER siguen pendientes de confirmar titularidad. La cifra anterior de cartera no se declaró corregida; la pantalla ahora muestra subtotal de tenencias sin sumar `cash.total` ambiguo y avisa sobre posibles duplicados manuales.
-
-### Revisión del flujo Google y logout en Docker (20 de octubre de 2026)
-
-- Se corrigió el 403 de logout causado por comparar el origen público `localhost:3001` con el puerto interno `3000`; se conserva la validación exacta del encabezado `Origin` para CSRF. El callback Google usa el origen configurado para el intercambio OAuth detrás de Docker o un proxy HTTPS.
-- Se rechazaron retornos externos con caracteres de control y parámetros `next` repetidos. La revisión independiente detectó ambos defectos y confirmó sus correcciones.
-- La compilación Docker y 152 pruebas en 26 archivos pasaron. En HTTP local: Inicio 200, login con `next` repetido 200, Portafolio anónimo 307, logout con Origin válido 303 y ajeno 403; inicio Google redirige a Google. El intercambio completo con una cuenta real debe comprobarse en navegador.
-- En Vercel Production están `MIRADOR_APP_URL` y `DATABASE_URL`, pero faltan `GOOGLE_CLIENT_ID` y `GOOGLE_CLIENT_SECRET`. `prisma migrate status` confirmó que `20261020170000_google_identity_and_ownership` sigue sin aplicar en Neon. El login productivo debe permanecer cerrado hasta registrar el callback HTTPS, configurar las variables, respaldar y aplicar esa migración, y desplegar de nuevo.
+- Google OIDC sign-in for the two agreed emails, revocable Mirador sessions, `ownerId` isolation in queries/actions, per-user IOL connection without password grant, per-user Telegram, and an additive migration have been implemented. Old records remain ownerless.
+- `IOL_USERNAME`, `IOL_PASSWORD`, `APP_ACCESS_USER`, and `APP_ACCESS_PASSWORD` were removed from local and Vercel configuration; environment variable names were verified without displaying values.
+- The security cutover was deployed directly to the Vercel `mirador-inversiones` project, deployment `dpl_9paJ7CZADdf9fiNbTVh7prAF8aUi`. The production domain returned 200 for public areas and 307 to `/login` for the five private areas without a session; the tested previous deployment URL returned a protection-related 302.
+- Prisma successfully applied all five migrations to an isolated Docker database, which was then removed. TypeScript, build, and 140 tests passed; a test with fictitious A/B sessions confirmed each sees only their own list and that the legacy row is absent.
+- Automatic review rejected exporting a full Neon backup to a local file because it might contain personal data and tokens. That export and the new production migration were not run; specific backup authorization was requested.
+- Production sign-in remains closed because `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` are missing in Vercel. `MIRADOR_APP_URL` has been added to Production and will take effect with the next deployment. Attribution of old data and the OWNER role still require ownership confirmation. The prior portfolio figure has not been declared fixed; the screen now shows a holdings subtotal without adding ambiguous `cash.total` and warns about possible manual duplicates.
